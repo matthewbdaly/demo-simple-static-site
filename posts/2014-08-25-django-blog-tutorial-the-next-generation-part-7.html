@@ -1,0 +1,1733 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta property="fb:app_id" content=""/>
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/bootstrap-sass/dist/css/bootstrap.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/flat-ui/dist/css/flat-ui.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/highlightjs/styles/zenburn.css" media="all" />
+        <link rel="alternate" type="application/rss+xml" title="A Series of Quite Extraordinary Events - feed" href="/index.xml" />
+        <title>A Series of Quite Extraordinary Events - Django Blog Tutorial - the Next Generation - Part 7</title>
+    </head>
+    <body>
+        <header>
+            <div class="container">
+                <div class="page-header">
+                    <h1>A Series of Quite Extraordinary Events</h1>
+                    <h2>Being the blog of Matthew Daly Esquire</h2>
+                    <nav>
+                        <a href="/">Home</a> | <a href="/archive.html">Archives</a> | <a href="/about.html">About</a> | <a href="/rss.xml">RSS</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <article class="post">
+    
+  <div class="title">
+    <h1><a href="/posts/2014-08-25-django-blog-tutorial-the-next-generation-part-7.html">Django Blog Tutorial - the Next Generation - Part 7</a></h1>
+  </div>
+  <section>
+    <p>Hello once again! In this instalment we&#39;ll cover:</p>
+<ul>
+<li>Caching your content with Memcached to improve your site&#39;s performance</li>
+<li>Refactoring and simplifying our tests</li>
+<li>Implementing additional feeds</li>
+<li>Creating a simple search engine</li>
+</ul>
+<p>Don&#39;t forget to activate your virtualenv:</p>
+<pre><code class="lang-bash">source venv/bin/activate</code></pre>
+<p>Now let&#39;s get started!</p>
+<h1 id="memcached">Memcached</h1>
+<p>If you frequent (or used to frequent) social media sites like Reddit, Slashdot or Digg, you may be familiar with something called variously the Digg or Slashdot effect, whereby if a page gets submitted to a social media site, and subsequently becomes popular, it can be hit by a huge number of HTTP requests in a very short period of time, slowing it down or even taking the server down completely.</p>
+<p>Now, as a general rule of thumb, for most dynamic websites such as blogs, the bottleneck is not the web server or the programming language, but the database. If you have a lot of people hitting the same page over and over again in quick succession, then you&#39;re essentially running the same query over and over again and getting the same result each time, which is expensive in terms of processing power. What you need to be able to do is cache the results of the query in memory for a given period of time so that the number of queries is reduced.</p>
+<p>That&#39;s where Memcached comes in. It&#39;s a simple key-value store that allows you to store values in memory for a given period of time so that they can be retrieved without having to query the database. Memcached is a very common choice for caching, and is by far the fastest and most efficient type of cache available for Django. It&#39;s also available on Heroku&#39;s free tier.</p>
+<p>Django has a very powerful caching framework that supports numerous types of cache in addition to Memcached, such as:</p>
+<ul>
+<li>Database caching</li>
+<li>Filesystem caching</li>
+<li>Local memory caching</li>
+</ul>
+<p>There are also third-party backends for using other caching systems such as Redis.</p>
+<p>Now, the cache can be used in a number of different ways. You can cache only certain parts of your site if you wish. However, because our site is heavily content-driven, we should be pretty safe to use the per-site cache, which is the simplest way to set up caching.</p>
+<p>In order to set up Memcached, there&#39;s a couple of Python libraries we&#39;ll need. If you want to install them locally, however, you&#39;ll need to install both memcached and libmemcached (on Ubuntu, the packages you need are called <code>memcached</code> and <code>libmemcached-dev</code>) on your development machine. If you don&#39;t want to do this, then just copy and paste these lines into <code>requirements.txt</code> instead:</p>
+<p>``` bash requirements.txt
+django-pylibmc-sasl==0.2.4
+pylibmc==1.3.0</p>
+<pre><code>
+If you are happy to install these dependencies locally, <span class="keyword">then</span> run <span class="keyword">this</span> command once memcached <span class="keyword">and</span> libmemcached are installed:
+
+`<span class="javascript"></span>``<span class="javascript"> bash
+pip install pylibmc django-pylibmc-sasl</span></code></pre>
+<p>With that done let&#39;s configure Memcached. Open up the settings file and add the following at the bottom:</p>
+<p>``` python django_tutorial_blog_ng/settings.py
+def get_cache():
+  import os
+  try:
+    os.environ[&#39;MEMCACHE_SERVERS&#39;] = os.environ[&#39;MEMCACHIER_SERVERS&#39;].replace(&#39;,&#39;, &#39;;&#39;)
+    os.environ[&#39;MEMCACHE_USERNAME&#39;] = os.environ[&#39;MEMCACHIER_USERNAME&#39;]
+    os.environ[&#39;MEMCACHE_PASSWORD&#39;] = os.environ[&#39;MEMCACHIER_PASSWORD&#39;]
+    return {
+      &#39;default&#39;: {
+        &#39;BACKEND&#39;: &#39;django_pylibmc.memcached.PyLibMCCache&#39;,
+        &#39;TIMEOUT&#39;: 300,
+        &#39;BINARY&#39;: True,
+        &#39;OPTIONS&#39;: { &#39;tcp_nodelay&#39;: True }
+      }
+    }
+  except:
+    return {
+      &#39;default&#39;: {
+        &#39;BACKEND&#39;: &#39;django.core.cache.backends.locmem.LocMemCache&#39;
+      }
+    }</p>
+<p>CACHES = get_cache()
+CACHE_MIDDLEWARE_ALIAS = &#39;default&#39;
+CACHE_MIDDLEWARE_SECONDS = 300
+CACHE_MIDDLEWARE_KEY_PREFIX = &#39;&#39;</p>
+<pre><code>
+<span class="keyword">Then</span> add the following <span class="keyword">to</span> `MIDDLEWARE_CLASSES`:
+
+``` python django_tutorial_blog_ng/settings.py
+    <span class="attribute">'django</span>.middleware.cache.UpdateCacheMiddleware',
+    <span class="attribute">'django</span>.middleware.common.CommonMiddleware',
+    <span class="attribute">'django</span>.middleware.cache.FetchFromCacheMiddleware',</code></pre>
+<p>That&#39;s it! The first section configures the application to use Memcached to cache the content when running on Heroku, and sets some configuration parameters, while the second  section tells Django to use the per-site cache in order to cache all the site content.</p>
+<p>Now, Heroku doesn&#39;t include Memcached by default - instead it&#39;s available as an add-on called Memcachier. To use add-ons you need to set up a credit card for billing. We will set it up to use the free developer plan, but if you outgrow this you can easily switch to a paid plan. To add Memcachier, run this command:</p>
+<pre><code class="lang-bash">heroku addons:add memcachier:dev</code></pre>
+<p>Please note that Memcachier can take a few minutes to get set up, so you may want to leave it a little while between adding it and pushing up your changes. Now we&#39;ll commit our changes:</p>
+<pre><code class="lang-bash">git add requirements.txt django_tutorial_blog_ng/settings.py
+git commit -m <span class="string">'Implemented caching with Memcached'</span></code></pre>
+<p>Then we&#39;ll push them up to our remote repository and to Heroku:</p>
+<pre><code class="lang-bash">git push origin master
+git push heroku master</code></pre>
+<p>And that&#39;s all you need to do to set up Memcached. In addition to storing your query results in Memcached, enabling the caching framework in Django will also set various HTTP headers to enable web proxies and browsers to cache content for an appropriate length of time. If you open up your browser&#39;s developer tools and compare the response headers for your homepage on the latest version of the code with the previous version, you&#39;ll notice that a number of additional headers appear, including <code>Cache-Control</code>, <code>Expires</code> and <code>Last-Modified</code>. These tell web browsers and web proxies how often to request the latest version of the HTML document, in order to help you reduce the bandwidth used.</p>
+<p>As you can see, for a site like this where you are the only person adding content, it&#39;s really easy to implement caching with Django, and for a blog there&#39;s very little reason not to do it. If you&#39;re not using Heroku and are instead hosting your site on a VPS, then the configuration will be somewhat different - see <a href="https://docs.djangoproject.com/en/1.6/topics/cache/#memcached">here</a> for details. You can also find information on using other cache backends on the same page.</p>
+<p>That isn&#39;t all you can do to speed up your site. Heroku doesn&#39;t seem to be very good for serving static files, and if your site is attracting a lot of traffic you might want to host your static files elsewhere, such as on Amazon&#39;s S3 service. Doing so is outside the scope of this tutorial, but for that use case, you should check out <a href="http://django-storages.readthedocs.org/en/latest/index.html">django-storages</a>.</p>
+<h1 id="clearing-the-cache-automatically">Clearing the cache automatically</h1>
+<p>There is one issue with this implementation. As it is right now, if you view the home page, add a post, then reload the page, you may not see the new post immediately because the cache will continue serving the old version until it has expired. That behaviour is less than ideal - we would like the cache to be cleared automatically when a new post gets added so that users will see the new version immediately. That response will still be cached afterwards, so it only means one extra query.</p>
+<p>This is the ideal place to introduce <a href="https://docs.djangoproject.com/en/dev/topics/signals/">signals</a>. Signals are a way to carry out a given action when an event takes place. In our case, we plan to clear the cache when a post is saved (either created or updated).</p>
+<p>Note that as we&#39;ll be testing the behaviour of the cache at this point, you&#39;ll need to install Memcached on your local machine, and we&#39;ll need to change the settings to fall back to our local Memcached instance:</p>
+<p>``` python django_tutorial_blog_ng/settings.py
+def get_cache():
+  import os
+  try:
+    os.environ[&#39;MEMCACHE_SERVERS&#39;] = os.environ[&#39;MEMCACHIER_SERVERS&#39;].replace(&#39;,&#39;, &#39;;&#39;)
+    os.environ[&#39;MEMCACHE_USERNAME&#39;] = os.environ[&#39;MEMCACHIER_USERNAME&#39;]
+    os.environ[&#39;MEMCACHE_PASSWORD&#39;] = os.environ[&#39;MEMCACHIER_PASSWORD&#39;]
+    return {
+      &#39;default&#39;: {
+        &#39;BACKEND&#39;: &#39;django_pylibmc.memcached.PyLibMCCache&#39;,
+        &#39;TIMEOUT&#39;: 300,
+        &#39;BINARY&#39;: True,
+        &#39;OPTIONS&#39;: { &#39;tcp_nodelay&#39;: True }
+      }
+    }
+  except:
+    return {
+      &#39;default&#39;: {
+        &#39;BACKEND&#39;: &#39;django.core.cache.backends.memcached.PyLibMCCache&#39;,
+        &#39;LOCATION&#39;: &#39;127.0.0.1:11211&#39;
+      }
+    }</p>
+<p>CACHES = get_cache()
+CACHE_MIDDLEWARE_ALIAS = &#39;default&#39;
+CACHE_MIDDLEWARE_SECONDS = 300
+CACHE_MIDDLEWARE_KEY_PREFIX = &#39;&#39;</p>
+<pre><code>
+<span class="comment">If</span> <span class="comment">you</span> <span class="comment">don't</span> <span class="comment">want</span> <span class="comment">to</span> <span class="comment">install</span> <span class="comment">Memcached</span> <span class="comment">locally</span>, <span class="comment">you</span> <span class="comment">can</span> <span class="comment">skip</span> <span class="comment">this</span> <span class="comment">step</span>, <span class="comment">but</span> <span class="comment">be</span> <span class="comment">aware</span> <span class="comment">that</span> <span class="comment">the</span> <span class="comment">test</span> <span class="comment">we</span> <span class="comment">write</span> <span class="comment">for</span> <span class="comment">clearing</span> <span class="comment">the</span> <span class="comment">cache</span> <span class="comment">will</span> <span class="comment">always</span> <span class="comment">pass</span> <span class="comment">if</span> <span class="comment">you</span> <span class="comment">do</span> <span class="comment">skip</span> <span class="comment">it</span>.
+
+<span class="comment">Then</span> <span class="comment">we'll</span> <span class="comment">run</span> <span class="comment">our</span> <span class="comment">tests</span> <span class="comment">to</span> <span class="comment">make</span> <span class="comment">sure</span> <span class="comment">nothing</span> <span class="comment">has</span> <span class="comment">been</span> <span class="comment">broken:</span>
+
+<span class="comment">```</span> <span class="comment">bash</span>
+<span class="comment">$</span> <span class="comment">python</span> <span class="comment">manage</span>.<span class="comment">py</span> <span class="comment">jenkins</span> <span class="comment">blogengine</span>
+<span class="comment">Creating</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span>
+<span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span>
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Ran</span> <span class="comment">23</span> <span class="comment">tests</span> <span class="comment">in</span> <span class="comment">6</span>.<span class="comment">164s</span>
+
+<span class="comment">OK</code></pre>
+<p>Let&#39;s commit:</p>
+<pre><code class="lang-bash">git add django_tutorial_blog_ng/settings.py
+git commit -m <span class="string">'Now use Memcached in development'</span></code></pre>
+<p>Now we&#39;ll add a test for clearing the cache to <code>PostViewTest</code>:</p>
+<p>``` python blogengine/tests.py
+    def test_clear_cache(self):</p>
+<pre><code>    <span class="comment"># Create the category</span>
+    category = Category()
+    category.<span class="property">name</span> = 'python'
+    category.description = 'The Python programming language'
+    category.save()
+
+    <span class="comment"># Create the tag</span>
+    tag = Tag()
+    tag.<span class="property">name</span> = 'perl'
+    tag.description = 'The Perl programming language'
+    tag.save()
+
+    <span class="comment"># Create the author</span>
+    author = User.objects.create_user('testuser', 'user@example.com', 'password')
+    author.save()
+
+    <span class="comment"># Create the site</span>
+    site = Site()
+    site.<span class="property">name</span> = 'example.com'
+    site.domain = 'example.com'
+    site.save()
+
+    <span class="comment"># Create the first post</span>
+    post = Post()
+    post.title = 'My <span class="keyword">first</span> post'
+    post.<span class="type">text</span> = 'This <span class="keyword">is</span> [<span class="keyword">my</span> <span class="keyword">first</span> blog post](http://<span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span>:<span class="number">8000</span>/)'
+    post.slug = '<span class="keyword">my</span>-<span class="keyword">first</span>-post'
+    post.pub_date = timezone.now()
+    post.author = author
+    post.site = site
+    post.category = category
+    post.save()
+    post.tags.add(tag)
+
+    <span class="comment"># Check new post saved</span>
+    all_posts = Post.objects.all()
+    self.assertEquals(len(all_posts), <span class="number">1</span>)
+
+    <span class="comment"># Fetch the index</span>
+    response = self.client.<span class="keyword">get</span>('/')
+    self.assertEquals(response.status_code, <span class="number">200</span>)
+
+    <span class="comment"># Create the second post</span>
+    post = Post()
+    post.title = 'My <span class="keyword">second</span> post'
+    post.<span class="type">text</span> = 'This <span class="keyword">is</span> [<span class="keyword">my</span> <span class="keyword">second</span> blog post](http://<span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span>:<span class="number">8000</span>/)'
+    post.slug = '<span class="keyword">my</span>-<span class="keyword">second</span>-post'
+    post.pub_date = timezone.now()
+    post.author = author
+    post.site = site
+    post.category = category
+    post.save()
+    post.tags.add(tag)
+
+    <span class="comment"># Fetch the index again</span>
+    response = self.client.<span class="keyword">get</span>('/')
+
+    <span class="comment"># Check second post present</span>
+    self.assertTrue('<span class="keyword">my</span> <span class="keyword">second</span> blog post' <span class="keyword">in</span> response.content)</code></pre>
+<pre><code>
+This should be fairly self-explanatory. We create one post, <span class="keyword">and</span> request <span class="keyword">the</span> index page. We <span class="keyword">then</span> add a <span class="keyword">second</span> post, request <span class="keyword">the</span> index page again, <span class="keyword">and</span> check <span class="keyword">for</span> <span class="keyword">the</span> <span class="keyword">second</span> post. The test should fail because <span class="keyword">the</span> cached <span class="property">version</span> <span class="keyword">is</span> returned, rather than <span class="keyword">the</span> <span class="property">version</span> <span class="keyword">in</span> <span class="keyword">the</span> database.
+
+Now we have a test <span class="keyword">in</span> place, we can implement a fix. First, add this <span class="keyword">to</span> <span class="keyword">the</span> top <span class="keyword">of</span> your `models.py`:
+
+``` python blogengine/models.py
+<span class="keyword">from</span> django.db.models.signals import post_save
+<span class="keyword">from</span> django.core.cache import cache</code></pre>
+<p>Then add the following at the bottom of the file:</p>
+<p>``` python blogengine/models.py</p>
+<h1 id="define-signals">Define signals</h1>
+<p>def new_post(sender, instance, created, **kwargs):
+    cache.clear()</p>
+<h1 id="set-up-signals">Set up signals</h1>
+<p>post_save.connect(new_post, sender=Post)</p>
+<pre><code>
+<span class="comment">This</span> <span class="comment">is</span> <span class="comment">fairly</span> <span class="comment">straightforward</span>. <span class="comment">What</span> <span class="comment">we're</span> <span class="comment">doing</span> <span class="comment">is</span> <span class="comment">first</span> <span class="comment">defining</span> <span class="comment">a</span> <span class="comment">function</span> <span class="comment">called</span> <span class="comment">`new_post`</span> <span class="comment">that</span> <span class="comment">is</span> <span class="comment">called</span> <span class="comment">when</span> <span class="comment">a</span> <span class="comment">new</span> <span class="comment">post</span> <span class="comment">is</span> <span class="comment">created</span>. <span class="comment">We</span> <span class="comment">then</span> <span class="comment">connect</span> <span class="comment">it</span> <span class="comment">to</span> <span class="comment">the</span> <span class="comment">`post_save`</span> <span class="comment">signal</span>. <span class="comment">When</span> <span class="comment">a</span> <span class="comment">post</span> <span class="comment">is</span> <span class="comment">saved</span>, <span class="comment">it</span> <span class="comment">calls</span> <span class="comment">`new_post`</span>, <span class="comment">which</span> <span class="comment">clears</span> <span class="comment">the</span> <span class="comment">cache</span>, <span class="comment">making</span> <span class="comment">sure</span> <span class="comment">users</span> <span class="comment">are</span> <span class="comment">seeing</span> <span class="comment">the</span> <span class="comment">latest</span> <span class="comment">and</span> <span class="comment">greatest</span> <span class="comment">version</span> <span class="comment">of</span> <span class="comment">your</span> <span class="comment">site</span> <span class="comment">immediately</span>.
+
+<span class="comment">Let's</span> <span class="comment">test</span> <span class="comment">it:</span>
+
+<span class="comment">```</span> <span class="comment">bash</span>
+<span class="comment">$</span> <span class="comment">python</span> <span class="comment">manage</span>.<span class="comment">py</span> <span class="comment">jenkins</span> <span class="comment">blogengine</span>
+<span class="comment">Creating</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span>
+<span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span>
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Ran</span> <span class="comment">24</span> <span class="comment">tests</span> <span class="comment">in</span> <span class="comment">8</span>.<span class="comment">473s</span>
+
+<span class="comment">OK</span>
+<span class="comment">Destroying</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span></code></pre>
+<p>There are a number of signals available, and when you create one, you have access to the created object via the <code>instance</code> parameter. Using signals you can implement all kinds of functionality. For instance, you could implement the functionality to send an email when a new post is published.</p>
+<p>If you&#39;re using Travis CI, you&#39;ll also need to update the config file:</p>
+<p>``` yaml .travis.yml
+language: python
+python:
+services: memcached
+before_install:</p>
+<pre><code>- su<span class="operator"><span class="keyword">do</span> apt-<span class="keyword">get</span> install -y libmemcached-dev</code></pre>
+<h1 id="command-to-install-dependencies">command to install dependencies</h1>
+<p>install: &quot;pip install -r requirements.txt&quot;</p>
+<h1 id="command-to-run-tests">command to run tests</h1>
+<p>script: coverage run --include=&quot;blogengine/<em>&quot; --omit=&quot;blogengine/migrations/</em>&quot; manage.py test blogengine
+after_success:
+    coveralls</p>
+<pre><code>
+<span class="typename">Time</span> <span class="keyword">to</span> commit:
+
+``` bash
+git add blogengine/ .travis.yml
+git commit -m <span class="attribute">'Now</span> clear cache <span class="keyword">when</span> post added'</code></pre>
+<h1 id="formatting-for-rss-feeds">Formatting for RSS feeds</h1>
+<p>Now, we want to offer more than one option for RSS feeds. For instance, if your blog is aggregated on a site such as <a href="http://planet.python.org/">Planet Python</a>, but you also blog about JavaScript, you may want to be able to provide a feed for posts in the <code>python</code> category only.</p>
+<p>If you have written any posts that use any of Markdown&#39;s custom formatting, you may notice that if you load your RSS feed in a reader, it isn&#39;t formatted as Markdown. Let&#39;s fix that. First we&#39;ll amend our test:</p>
+<p>``` python blogengine/tests.py
+class FeedTest(BaseAcceptanceTest):
+    def test_all_post_feed(self):</p>
+<pre><code>    <span class="comment"># Create the category</span>
+    category = Category()
+    category.<span class="property">name</span> = 'python'
+    category.description = 'The Python programming language'
+    category.save()
+
+    <span class="comment"># Create the tag</span>
+    tag = Tag()
+    tag.<span class="property">name</span> = 'python'
+    tag.description = 'The Python programming language'
+    tag.save()
+
+    <span class="comment"># Create the author</span>
+    author = User.objects.create_user('testuser', 'user@example.com', 'password')
+    author.save()
+
+    <span class="comment"># Create the site</span>
+    site = Site()
+    site.<span class="property">name</span> = 'example.com'
+    site.domain = 'example.com'
+    site.save()
+
+    <span class="comment"># Create a post</span>
+    post = Post()
+    post.title = 'My <span class="keyword">first</span> post'
+    post.<span class="type">text</span> = 'This <span class="keyword">is</span> <span class="keyword">my</span> *<span class="keyword">first</span>* blog post'
+    post.slug = '<span class="keyword">my</span>-<span class="keyword">first</span>-post'
+    post.pub_date = timezone.now()
+    post.author = author
+    post.site = site
+    post.category = category
+
+    <span class="comment"># Save it</span>
+    post.save()
+
+    <span class="comment"># Add the tag</span>
+    post.tags.add(tag)
+    post.save()
+
+    <span class="comment"># Check we can find it</span>
+    all_posts = Post.objects.all()
+    self.assertEquals(len(all_posts), <span class="number">1</span>)
+    only_post = all_posts[<span class="number">0</span>]
+    self.assertEquals(only_post, post)
+
+    <span class="comment"># Fetch the feed</span>
+    response = self.client.<span class="keyword">get</span>('/feeds/posts/')
+    self.assertEquals(response.status_code, <span class="number">200</span>)
+
+    <span class="comment"># Parse the feed</span>
+    feed = feedparser.parse(response.content)
+
+    <span class="comment"># Check length</span>
+    self.assertEquals(len(feed.entries), <span class="number">1</span>)
+
+    <span class="comment"># Check post retrieved is the correct one</span>
+    feed_post = feed.entries[<span class="number">0</span>]
+    self.assertEquals(feed_post.title, post.title)
+    self.assertTrue('This <span class="keyword">is</span> <span class="keyword">my</span> &lt;em&gt;<span class="keyword">first</span>&lt;/em&gt; blog post' <span class="keyword">in</span> feed_post.description)</code></pre>
+<pre><code>
+Don<span class="string">'t forget to run the tests to make sure they fail. Now, let'</span>s fix it:
+
+``` python blogengine/views.py
+<span class="keyword">from</span> django.shortcuts <span class="keyword">import</span> render
+<span class="keyword">from</span> django.views.generic <span class="keyword">import</span> ListView
+<span class="keyword">from</span> blogengine.models <span class="keyword">import</span> Category, Post, Tag
+<span class="keyword">from</span> django.contrib.syndication.views <span class="keyword">import</span> Feed
+<span class="keyword">from</span> django.utils.encoding <span class="keyword">import</span> force_unicode
+<span class="keyword">from</span> django.utils.safestring <span class="keyword">import</span> mark_safe
+<span class="keyword">import</span> markdown2
+
+<span class="comment"># Create your views here.</span>
+<span class="class"><span class="keyword">class</span> <span class="title">CategoryListView</span><span class="params">(ListView)</span>:</span>
+    <span class="function"><span class="keyword">def</span> <span class="title">get_queryset</span><span class="params">(self)</span>:</span>
+        slug = self.kwargs[<span class="string">'slug'</span>]
+        <span class="keyword">try</span>:
+            category = Category.objects.get(slug=slug)
+            <span class="keyword">return</span> Post.objects.filter(category=category)
+        <span class="keyword">except</span> Category.DoesNotExist:
+            <span class="keyword">return</span> Post.objects.none()
+
+
+<span class="class"><span class="keyword">class</span> <span class="title">TagListView</span><span class="params">(ListView)</span>:</span>
+    <span class="function"><span class="keyword">def</span> <span class="title">get_queryset</span><span class="params">(self)</span>:</span>
+        slug = self.kwargs[<span class="string">'slug'</span>]
+        <span class="keyword">try</span>:
+            tag = Tag.objects.get(slug=slug)
+            <span class="keyword">return</span> tag.post_set.all()
+        <span class="keyword">except</span> Tag.DoesNotExist:
+            <span class="keyword">return</span> Post.objects.none()
+
+
+<span class="class"><span class="keyword">class</span> <span class="title">PostsFeed</span><span class="params">(Feed)</span>:</span>
+    title = <span class="string">"RSS feed - posts"</span>
+    link = <span class="string">"feeds/posts/"</span>
+    description = <span class="string">"RSS feed - blog posts"</span>
+
+    <span class="function"><span class="keyword">def</span> <span class="title">items</span><span class="params">(self)</span>:</span>
+        <span class="keyword">return</span> Post.objects.order_by(<span class="string">'-pub_date'</span>)
+
+    <span class="function"><span class="keyword">def</span> <span class="title">item_title</span><span class="params">(self, item)</span>:</span>
+        <span class="keyword">return</span> item.title
+
+    <span class="function"><span class="keyword">def</span> <span class="title">item_description</span><span class="params">(self, item)</span>:</span>
+        extras = [<span class="string">"fenced-code-blocks"</span>]
+        content = mark_safe(markdown2.markdown(force_unicode(item.text),
+                                               extras = extras))
+        <span class="keyword">return</span> content</code></pre>
+<p>All we&#39;re doing here is amending the <code>item_description</code> method of <code>PostsFeed</code> to render it as Markdown. Now let&#39;s run our tests again:</p>
+<pre><code class="lang-bash">$ python manage.py jenkins
+Creating test database <span class="keyword">for</span> alias <span class="string">'default'</span>...
+........................
+----------------------------------------------------------------------
+Ran 24 tests <span class="keyword">in</span> 9.370s
+
+OK
+Destroying test database <span class="keyword">for</span> alias <span class="string">'default'</span>...</code></pre>
+<p>With that done, we&#39;ll commit our changes:</p>
+<pre><code class="lang-bash">git add blogengine/
+git commit -m <span class="string">'Fixed rendering for post feed'</span></code></pre>
+<h1 id="refactoring-our-tests">Refactoring our tests</h1>
+<p>Now, before we get into implementing the feed, our tests are a bit verbose. We create a lot of items over and over again - let&#39;s sort that out. Factory Boy is a handy Python module that allows you to create easy-to-use factories for creating objects over and over again in tests. Let&#39;s install it:</p>
+<pre><code class="lang-bash">pip install factory_boy
+pip freeze &gt; requirements.txt
+git add requirements.txt
+git commit -m <span class="string">'Installed Factory Boy'</span></code></pre>
+<p>Now let&#39;s set up a factory for creating posts. Add this at the top of the test file:</p>
+<p>``` python blogengine/tests.py
+import factory.django</p>
+<pre><code>
+Then, before your actual tests, insert the following:
+
+``` python blogengine/tests.py
+<span class="comment"># Factories</span>
+<span class="class"><span class="keyword">class</span> <span class="title">SiteFactory</span><span class="params">(factory.django.DjangoModelFactory)</span>:</span>
+    <span class="class"><span class="keyword">class</span> <span class="title">Meta</span>:</span>
+        model = Site
+        django_get_or_create = (
+            <span class="string">'name'</span>,
+            <span class="string">'domain'</span>
+        )
+
+    name = <span class="string">'example.com'</span>
+    domain = <span class="string">'example.com'</span></code></pre>
+<p>Now, wherever you call <code>Site()</code>, add its attributes, and save it, replace those lines with the following:</p>
+<p>``` python blogengine/tests.py
+        site = SiteFactory()</p>
+<pre><code>
+<span class="comment">Much</span> <span class="comment">simpler</span> <span class="comment">and</span> <span class="comment">more</span> <span class="comment">concise</span>, <span class="comment">I'm</span> <span class="comment">sure</span> <span class="comment">you'll</span> <span class="comment">agree!</span> <span class="comment">Now</span>, <span class="comment">let's</span> <span class="comment">run</span> <span class="comment">the</span> <span class="comment">tests</span> <span class="comment">to</span> <span class="comment">make</span> <span class="comment">sure</span> <span class="comment">they</span> <span class="comment">aren't</span> <span class="comment">broken:</span>
+
+<span class="comment">```</span> <span class="comment">bash</span>
+<span class="comment">$</span> <span class="comment">python</span> <span class="comment">manage</span>.<span class="comment">py</span> <span class="comment">test</span> <span class="comment">blogengine</span>
+<span class="comment">Creating</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span>
+<span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span>
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Ran</span> <span class="comment">24</span> <span class="comment">tests</span> <span class="comment">in</span> <span class="comment">7</span>.<span class="comment">482s</span>
+
+<span class="comment">OK</span>
+<span class="comment">Destroying</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span></code></pre>
+<p>Let&#39;s commit again:</p>
+<pre><code class="lang-bash">git add blogengine/tests.py
+git commit -m <span class="string">'Now use Factory Boy for site objects'</span></code></pre>
+<p>Let&#39;s do the same thing with <code>Category</code> objects:</p>
+<p>``` python blogengine/tests.py
+class CategoryFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Category
+        django_get_or_create = (
+            &#39;name&#39;,
+            &#39;description&#39;,
+            &#39;slug&#39;
+        )</p>
+<pre><code><span class="setting">name = <span class="value">'python'</span></span>
+<span class="setting">description = <span class="value">'The Python programming language'</span></span>
+<span class="setting">slug = <span class="value">'python'</span></span></code></pre>
+<pre><code>
+Again, just find every time we <span class="operator"><span class="keyword">call</span> <span class="string">`Category()`</span> <span class="keyword">and</span> <span class="keyword">replace</span> it <span class="keyword">with</span> the following:
+
+<span class="string">``</span><span class="string">` python blogengine/tests.py
+        category = CategoryFactory()</code></pre>
+<p>Now if we run our tests, we&#39;ll notice a serious error:</p>
+<pre><code class="lang-bash">$ python manage.py test blogengine
+Creating test database <span class="keyword">for</span> alias <span class="string">'default'</span>...
+EE..EE.EE.EE...E.EEE..E.
+======================================================================
+ERROR: test_create_category (blogengine.tests.PostTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 42, <span class="keyword">in</span> test_create_category
+    category = CategoryFactory()
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 82, <span class="keyword">in</span> __call__
+    <span class="keyword">return</span> cls.create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 585, <span class="keyword">in</span> create
+    <span class="keyword">return</span> cls._generate(True, attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 510, <span class="keyword">in</span> _generate
+    obj = cls._prepare(create, **attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 485, <span class="keyword">in</span> _prepare
+    <span class="keyword">return</span> cls._create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 151, <span class="keyword">in</span> _create
+    <span class="keyword">return</span> cls._get_or_create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 142, <span class="keyword">in</span> _get_or_create
+    obj, _created = manager.get_or_create(*args, **key_fields)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py"</span>, line 154, <span class="keyword">in</span> get_or_create
+    <span class="keyword">return</span> self.get_queryset().get_or_create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py"</span>, line 383, <span class="keyword">in</span> get_or_create
+    obj.save(force_insert=True, using=self.db)
+TypeError: save() got an unexpected keyword argument <span class="string">'force_insert'</span>
+
+======================================================================
+ERROR: test_create_post (blogengine.tests.PostTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 80, <span class="keyword">in</span> test_create_post
+    category = CategoryFactory()
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 82, <span class="keyword">in</span> __call__
+    <span class="keyword">return</span> cls.create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 585, <span class="keyword">in</span> create
+    <span class="keyword">return</span> cls._generate(True, attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 510, <span class="keyword">in</span> _generate
+    obj = cls._prepare(create, **attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 485, <span class="keyword">in</span> _prepare
+    <span class="keyword">return</span> cls._create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 151, <span class="keyword">in</span> _create
+    <span class="keyword">return</span> cls._get_or_create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 142, <span class="keyword">in</span> _get_or_create
+    obj, _created = manager.get_or_create(*args, **key_fields)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py"</span>, line 154, <span class="keyword">in</span> get_or_create
+    <span class="keyword">return</span> self.get_queryset().get_or_create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py"</span>, line 383, <span class="keyword">in</span> get_or_create
+    obj.save(force_insert=True, using=self.db)
+TypeError: save() got an unexpected keyword argument <span class="string">'force_insert'</span>
+
+======================================================================
+ERROR: test_create_post (blogengine.tests.AdminTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 339, <span class="keyword">in</span> test_create_post
+    category = CategoryFactory()
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 82, <span class="keyword">in</span> __call__
+    <span class="keyword">return</span> cls.create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 585, <span class="keyword">in</span> create
+    <span class="keyword">return</span> cls._generate(True, attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 510, <span class="keyword">in</span> _generate
+    obj = cls._prepare(create, **attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 485, <span class="keyword">in</span> _prepare
+    <span class="keyword">return</span> cls._create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 151, <span class="keyword">in</span> _create
+    <span class="keyword">return</span> cls._get_or_create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 142, <span class="keyword">in</span> _get_or_create
+    obj, _created = manager.get_or_create(*args, **key_fields)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py"</span>, line 154, <span class="keyword">in</span> get_or_create
+    <span class="keyword">return</span> self.get_queryset().get_or_create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py"</span>, line 383, <span class="keyword">in</span> get_or_create
+    obj.save(force_insert=True, using=self.db)
+TypeError: save() got an unexpected keyword argument <span class="string">'force_insert'</span>
+
+======================================================================
+ERROR: test_create_post_without_tag (blogengine.tests.AdminTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 378, <span class="keyword">in</span> test_create_post_without_tag
+    category = CategoryFactory()
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 82, <span class="keyword">in</span> __call__
+    <span class="keyword">return</span> cls.create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 585, <span class="keyword">in</span> create
+    <span class="keyword">return</span> cls._generate(True, attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 510, <span class="keyword">in</span> _generate
+    obj = cls._prepare(create, **attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 485, <span class="keyword">in</span> _prepare
+    <span class="keyword">return</span> cls._create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 151, <span class="keyword">in</span> _create
+    <span class="keyword">return</span> cls._get_or_create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 142, <span class="keyword">in</span> _get_or_create
+    obj, _created = manager.get_or_create(*args, **key_fields)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py"</span>, line 154, <span class="keyword">in</span> get_or_create
+    <span class="keyword">return</span> self.get_queryset().get_or_create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py"</span>, line 383, <span class="keyword">in</span> get_or_create
+    obj.save(force_insert=True, using=self.db)
+TypeError: save() got an unexpected keyword argument <span class="string">'force_insert'</span>
+
+======================================================================
+ERROR: test_delete_category (blogengine.tests.AdminTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 245, <span class="keyword">in</span> test_delete_category
+    category = CategoryFactory()
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 82, <span class="keyword">in</span> __call__
+    <span class="keyword">return</span> cls.create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 585, <span class="keyword">in</span> create
+    <span class="keyword">return</span> cls._generate(True, attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 510, <span class="keyword">in</span> _generate
+    obj = cls._prepare(create, **attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 485, <span class="keyword">in</span> _prepare
+    <span class="keyword">return</span> cls._create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 151, <span class="keyword">in</span> _create
+    <span class="keyword">return</span> cls._get_or_create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 142, <span class="keyword">in</span> _get_or_create
+    obj, _created = manager.get_or_create(*args, **key_fields)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py"</span>, line 154, <span class="keyword">in</span> get_or_create
+    <span class="keyword">return</span> self.get_queryset().get_or_create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py"</span>, line 383, <span class="keyword">in</span> get_or_create
+    obj.save(force_insert=True, using=self.db)
+TypeError: save() got an unexpected keyword argument <span class="string">'force_insert'</span>
+
+======================================================================
+ERROR: test_delete_post (blogengine.tests.AdminTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 467, <span class="keyword">in</span> test_delete_post
+    category = CategoryFactory()
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 82, <span class="keyword">in</span> __call__
+    <span class="keyword">return</span> cls.create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 585, <span class="keyword">in</span> create
+    <span class="keyword">return</span> cls._generate(True, attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 510, <span class="keyword">in</span> _generate
+    obj = cls._prepare(create, **attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 485, <span class="keyword">in</span> _prepare
+    <span class="keyword">return</span> cls._create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 151, <span class="keyword">in</span> _create
+    <span class="keyword">return</span> cls._get_or_create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 142, <span class="keyword">in</span> _get_or_create
+    obj, _created = manager.get_or_create(*args, **key_fields)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py"</span>, line 154, <span class="keyword">in</span> get_or_create
+    <span class="keyword">return</span> self.get_queryset().get_or_create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py"</span>, line 383, <span class="keyword">in</span> get_or_create
+    obj.save(force_insert=True, using=self.db)
+TypeError: save() got an unexpected keyword argument <span class="string">'force_insert'</span>
+
+======================================================================
+ERROR: test_edit_category (blogengine.tests.AdminTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 221, <span class="keyword">in</span> test_edit_category
+    category = CategoryFactory()
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 82, <span class="keyword">in</span> __call__
+    <span class="keyword">return</span> cls.create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 585, <span class="keyword">in</span> create
+    <span class="keyword">return</span> cls._generate(True, attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 510, <span class="keyword">in</span> _generate
+    obj = cls._prepare(create, **attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 485, <span class="keyword">in</span> _prepare
+    <span class="keyword">return</span> cls._create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 151, <span class="keyword">in</span> _create
+    <span class="keyword">return</span> cls._get_or_create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 142, <span class="keyword">in</span> _get_or_create
+    obj, _created = manager.get_or_create(*args, **key_fields)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py"</span>, line 154, <span class="keyword">in</span> get_or_create
+    <span class="keyword">return</span> self.get_queryset().get_or_create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py"</span>, line 383, <span class="keyword">in</span> get_or_create
+    obj.save(force_insert=True, using=self.db)
+TypeError: save() got an unexpected keyword argument <span class="string">'force_insert'</span>
+
+======================================================================
+ERROR: test_edit_post (blogengine.tests.AdminTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 410, <span class="keyword">in</span> test_edit_post
+    category = CategoryFactory()
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 82, <span class="keyword">in</span> __call__
+    <span class="keyword">return</span> cls.create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 585, <span class="keyword">in</span> create
+    <span class="keyword">return</span> cls._generate(True, attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 510, <span class="keyword">in</span> _generate
+    obj = cls._prepare(create, **attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 485, <span class="keyword">in</span> _prepare
+    <span class="keyword">return</span> cls._create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 151, <span class="keyword">in</span> _create
+    <span class="keyword">return</span> cls._get_or_create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 142, <span class="keyword">in</span> _get_or_create
+    obj, _created = manager.get_or_create(*args, **key_fields)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py"</span>, line 154, <span class="keyword">in</span> get_or_create
+    <span class="keyword">return</span> self.get_queryset().get_or_create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py"</span>, line 383, <span class="keyword">in</span> get_or_create
+    obj.save(force_insert=True, using=self.db)
+TypeError: save() got an unexpected keyword argument <span class="string">'force_insert'</span>
+
+======================================================================
+ERROR: test_all_post_feed (blogengine.tests.FeedTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 810, <span class="keyword">in</span> test_all_post_feed
+    category = CategoryFactory()
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 82, <span class="keyword">in</span> __call__
+    <span class="keyword">return</span> cls.create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 585, <span class="keyword">in</span> create
+    <span class="keyword">return</span> cls._generate(True, attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 510, <span class="keyword">in</span> _generate
+    obj = cls._prepare(create, **attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 485, <span class="keyword">in</span> _prepare
+    <span class="keyword">return</span> cls._create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 151, <span class="keyword">in</span> _create
+    <span class="keyword">return</span> cls._get_or_create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 142, <span class="keyword">in</span> _get_or_create
+    obj, _created = manager.get_or_create(*args, **key_fields)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py"</span>, line 154, <span class="keyword">in</span> get_or_create
+    <span class="keyword">return</span> self.get_queryset().get_or_create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py"</span>, line 383, <span class="keyword">in</span> get_or_create
+    obj.save(force_insert=True, using=self.db)
+TypeError: save() got an unexpected keyword argument <span class="string">'force_insert'</span>
+
+======================================================================
+ERROR: test_category_page (blogengine.tests.PostViewTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 640, <span class="keyword">in</span> test_category_page
+    category = CategoryFactory()
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 82, <span class="keyword">in</span> __call__
+    <span class="keyword">return</span> cls.create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 585, <span class="keyword">in</span> create
+    <span class="keyword">return</span> cls._generate(True, attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 510, <span class="keyword">in</span> _generate
+    obj = cls._prepare(create, **attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 485, <span class="keyword">in</span> _prepare
+    <span class="keyword">return</span> cls._create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 151, <span class="keyword">in</span> _create
+    <span class="keyword">return</span> cls._get_or_create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 142, <span class="keyword">in</span> _get_or_create
+    obj, _created = manager.get_or_create(*args, **key_fields)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py"</span>, line 154, <span class="keyword">in</span> get_or_create
+    <span class="keyword">return</span> self.get_queryset().get_or_create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py"</span>, line 383, <span class="keyword">in</span> get_or_create
+    obj.save(force_insert=True, using=self.db)
+TypeError: save() got an unexpected keyword argument <span class="string">'force_insert'</span>
+
+======================================================================
+ERROR: test_clear_cache (blogengine.tests.PostViewTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 753, <span class="keyword">in</span> test_clear_cache
+    category = CategoryFactory()
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 82, <span class="keyword">in</span> __call__
+    <span class="keyword">return</span> cls.create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 585, <span class="keyword">in</span> create
+    <span class="keyword">return</span> cls._generate(True, attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 510, <span class="keyword">in</span> _generate
+    obj = cls._prepare(create, **attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 485, <span class="keyword">in</span> _prepare
+    <span class="keyword">return</span> cls._create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 151, <span class="keyword">in</span> _create
+    <span class="keyword">return</span> cls._get_or_create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 142, <span class="keyword">in</span> _get_or_create
+    obj, _created = manager.get_or_create(*args, **key_fields)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py"</span>, line 154, <span class="keyword">in</span> get_or_create
+    <span class="keyword">return</span> self.get_queryset().get_or_create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py"</span>, line 383, <span class="keyword">in</span> get_or_create
+    obj.save(force_insert=True, using=self.db)
+TypeError: save() got an unexpected keyword argument <span class="string">'force_insert'</span>
+
+======================================================================
+ERROR: test_index (blogengine.tests.PostViewTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 518, <span class="keyword">in</span> test_index
+    category = CategoryFactory()
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 82, <span class="keyword">in</span> __call__
+    <span class="keyword">return</span> cls.create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 585, <span class="keyword">in</span> create
+    <span class="keyword">return</span> cls._generate(True, attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 510, <span class="keyword">in</span> _generate
+    obj = cls._prepare(create, **attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 485, <span class="keyword">in</span> _prepare
+    <span class="keyword">return</span> cls._create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 151, <span class="keyword">in</span> _create
+    <span class="keyword">return</span> cls._get_or_create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 142, <span class="keyword">in</span> _get_or_create
+
+
+    obj, _created = manager.get_or_create(*args, **key_fields)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py"</span>, line 154, <span class="keyword">in</span> get_or_create
+    <span class="keyword">return</span> self.get_queryset().get_or_create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py"</span>, line 383, <span class="keyword">in</span> get_or_create
+    obj.save(force_insert=True, using=self.db)
+TypeError: save() got an unexpected keyword argument <span class="string">'force_insert'</span>
+
+======================================================================
+ERROR: test_post_page (blogengine.tests.PostViewTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 576, <span class="keyword">in</span> test_post_page
+    category = CategoryFactory()
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 82, <span class="keyword">in</span> __call__
+    <span class="keyword">return</span> cls.create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 585, <span class="keyword">in</span> create
+    <span class="keyword">return</span> cls._generate(True, attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 510, <span class="keyword">in</span> _generate
+    obj = cls._prepare(create, **attrs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/base.py"</span>, line 485, <span class="keyword">in</span> _prepare
+    <span class="keyword">return</span> cls._create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 151, <span class="keyword">in</span> _create
+
+
+    <span class="keyword">return</span> cls._get_or_create(model_class, *args, **kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/factory/django.py"</span>, line 142, <span class="keyword">in</span> _get_or_create
+    obj, _created = manager.get_or_create(*args, **key_fields)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py"</span>, line 154, <span class="keyword">in</span> get_or_create
+    <span class="keyword">return</span> self.get_queryset().get_or_create(**kwargs)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py"</span>, line 383, <span class="keyword">in</span> get_or_create
+    obj.save(force_insert=True, using=self.db)
+TypeError: save() got an unexpected keyword argument <span class="string">'force_insert'</span>
+
+----------------------------------------------------------------------
+Ran 24 tests <span class="keyword">in</span> 5.162s
+
+FAILED (errors=13)
+Destroying test database <span class="keyword">for</span> alias <span class="string">'default'</span>...</code></pre>
+<p>Thankfully, this is easy to fix. We just need to amend the custom <code>save()</code> method of the <code>Category</code> model:</p>
+<p>``` python blogengine/models.py
+    def save(self, <em>args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(unicode(self.name))
+        super(Category, self).save(</em>args, **kwargs)</p>
+<pre><code>
+<span class="comment">That</span> <span class="comment">should</span> <span class="comment">resolve</span> <span class="comment">the</span> <span class="comment">issue:</span>
+
+<span class="comment">```</span> <span class="comment">bash</span>
+<span class="comment">$</span> <span class="comment">python</span> <span class="comment">manage</span>.<span class="comment">py</span> <span class="comment">jenkins</span>
+<span class="comment">Creating</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span>
+<span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span>
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Ran</span> <span class="comment">24</span> <span class="comment">tests</span> <span class="comment">in</span> <span class="comment">7</span>.<span class="comment">749s</span>
+
+<span class="comment">OK</span>
+<span class="comment">Destroying</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span></code></pre>
+<p>Let&#39;s commit again:</p>
+<pre><code class="lang-bash">git add blogengine/
+git commit -m <span class="string">'Category now uses Factory Boy'</span></code></pre>
+<p>Now let&#39;s do the same thing for tags:</p>
+<p>``` python blogengine/tests.py
+class TagFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Tag
+        django_get_or_create = (
+            &#39;name&#39;,
+            &#39;description&#39;,
+            &#39;slug&#39;
+        )</p>
+<pre><code><span class="setting">name = <span class="value">'python'</span></span>
+<span class="setting">description = <span class="value">'The Python programming language'</span></span>
+<span class="setting">slug = <span class="value">'python'</span></span></code></pre>
+<pre><code>
+And <span class="operator"><span class="keyword">replace</span> the sections <span class="keyword">where</span> we <span class="keyword">create</span> new <span class="string">`Tag`</span> objects:
+
+<span class="string">``</span><span class="string">` python blogengine/tests.py
+        tag = TagFactory()</code></pre>
+<p>Note that some tags have different values. We can easily pass different values to our <code>TagFactory()</code> to override the default values:</p>
+<p>``` python blogengine/tests.py
+        tag = TagFactory(name=&#39;perl&#39;, description=&#39;The Perl programming language&#39;)</p>
+<pre><code>
+The `Tag` model has <span class="keyword">the</span> same issue <span class="keyword">as</span> <span class="keyword">the</span> `Category` one did, so let's fix <span class="keyword">that</span>:
+
+``` python blogengine/models.py
+    def save(self, *args, **kwargs):
+        <span class="keyword">if</span> <span class="keyword">not</span> self.slug:
+            self.slug = slugify(unicode(self.<span class="property">name</span>))
+        super(Tag, self).save<span class="comment">(*args, **kwargs)</code></pre>
+<p>We run our tests again:</p>
+<pre><code class="lang-bash">$ python manage.py test blogengine/
+Creating test database <span class="keyword">for</span> alias <span class="string">'default'</span>...
+........................
+----------------------------------------------------------------------
+Ran 24 tests <span class="keyword">in</span> 7.153s
+
+OK
+Destroying test database <span class="keyword">for</span> alias <span class="string">'default'</span>...</code></pre>
+<p>Time to commit again:</p>
+<pre><code class="lang-bash">git add blogengine/
+git commit -m <span class="string">'Now use Factory Boy for tags'</span></code></pre>
+<p>Next we&#39;ll create a factory for adding users. Note that the factory name doesn&#39;t have to match the object name, so you can create factories for different types of users. Here we create a factory for authors - you could, for instance, create a separate factory for subscribers if you wanted:</p>
+<p>``` python blogengine/tests.py
+class AuthorFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = User
+        django_get_or_create = (&#39;username&#39;,&#39;email&#39;, &#39;password&#39;,)</p>
+<pre><code><span class="setting">username = <span class="value">'testuser'</span></span>
+<span class="setting">email = <span class="value">'user@example.com'</span></span>
+<span class="setting">password = <span class="value">'password'</span></span></code></pre>
+<pre><code>
+And as before, <span class="operator"><span class="keyword">replace</span> those sections <span class="keyword">where</span> we <span class="keyword">create</span> users <span class="keyword">with</span> the following:
+
+<span class="string">``</span><span class="string">` python blogengine/tests.py
+        author = AuthorFactory()</code></pre>
+<p>Run the tests again:</p>
+<pre><code class="lang-bash">$ python manage.py test blogengine
+Creating test database <span class="keyword">for</span> alias <span class="string">'default'</span>...
+........................
+----------------------------------------------------------------------
+Ran 24 tests <span class="keyword">in</span> 5.808s
+
+OK
+Destroying test database <span class="keyword">for</span> alias <span class="string">'default'</span>...</code></pre>
+<p>We commit our changes:</p>
+<pre><code class="lang-bash">git add blogengine/
+git commit -m <span class="string">'Now use Factory Boy for creating authors'</span></code></pre>
+<p>Now we&#39;ll create a flat page factory:</p>
+<p>``` python blogengine/tests.py</p>
+<p>class FlatPageFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = FlatPage
+        django_get_or_create = (
+            &#39;url&#39;,
+            &#39;title&#39;,
+            &#39;content&#39;
+        )</p>
+<pre><code><span class="setting">url = <span class="value">'/about/'</span></span>
+<span class="setting">title = <span class="value">'About me'</span></span>
+<span class="setting">content = <span class="value">'All about me'</span></span></code></pre>
+<pre><code>
+And <span class="keyword">use</span> it <span class="keyword">for</span> <span class="keyword">our</span> flat page test:
+<span class="string">``</span><span class="string">` python blogengine/tests.py
+        page = FlatPageFactory()</code></pre>
+<p>Check the tests pass:</p>
+<pre><code class="lang-bash">$ python manage.py test blogengine
+Creating test database <span class="keyword">for</span> alias <span class="string">'default'</span>...
+........................
+----------------------------------------------------------------------
+Ran 24 tests <span class="keyword">in</span> 5.796s
+
+OK
+Destroying test database <span class="keyword">for</span> alias <span class="string">'default'</span>...</code></pre>
+<p>And commit again:</p>
+<pre><code class="lang-bash">git add blogengine/
+git commit -m <span class="string">'Now use Factory Boy for flat page test'</span></code></pre>
+<p>Now we&#39;ll create a final factory for posts:</p>
+<p>``` python blogengine/tests.py
+class PostFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Post
+        django_get_or_create = (
+            &#39;title&#39;,
+            &#39;text&#39;,
+            &#39;slug&#39;,
+            &#39;pub_date&#39;
+        )</p>
+<pre><code><span class="setting">title = <span class="value">'My first post'</span></span>
+<span class="setting">text = <span class="value">'This is my first blog post'</span></span>
+<span class="setting">slug = <span class="value">'my-first-post'</span></span>
+<span class="setting">pub_date = <span class="value">timezone.now()</span></span>
+<span class="setting">author = <span class="value">factory.SubFactory(AuthorFactory)</span></span>
+<span class="setting">site = <span class="value">factory.SubFactory(SiteFactory)</span></span>
+<span class="setting">category = <span class="value">factory.SubFactory(CategoryFactory)</span></span></code></pre>
+<pre><code>
+This factory <span class="keyword">is</span> a little bit different. Because our `Post` model depends <span class="function_start"><span class="keyword">on</span> <span class="title">several</span></span> others, we need <span class="keyword">to</span> be able <span class="keyword">to</span> create those additional objects <span class="function_start"><span class="keyword">on</span> <span class="title">demand</span></span>. By designating them <span class="keyword">as</span> subfactories, we can easily create <span class="keyword">the</span> associated objects <span class="keyword">for</span> our `Post` object.
+
+That means <span class="keyword">that</span> <span class="keyword">not</span> only can we <span class="keyword">get</span> rid <span class="keyword">of</span> our `Post()` calls, <span class="keyword">but</span> we can also <span class="keyword">get</span> rid <span class="keyword">of</span> <span class="keyword">the</span> factory calls <span class="keyword">to</span> create <span class="keyword">the</span> associated objects <span class="keyword">for</span> `Post` models. Again, I'll leave actually doing this <span class="keyword">as</span> an exercise <span class="keyword">for</span> <span class="keyword">the</span> reader, <span class="keyword">but</span> you can always refer <span class="keyword">to</span> <span class="keyword">the</span> GitHub repository <span class="keyword">if</span> you're <span class="keyword">not</span> too sure.
+
+Make sure your tests still pass, <span class="keyword">then</span> commit <span class="keyword">the</span> changes:
+
+``` bash
+git add blogengine/
+git commit -m 'Now use Factory Boy <span class="keyword">for</span> testing posts'</code></pre>
+<p>Using Factory Boy made a big difference to the size of the test file - I was able to cut it down by over 200 lines of code. As your application gets bigger, it gets harder to maintain, so do what you can to keep the size down.</p>
+<h1 id="additional-rss-feeds">Additional RSS feeds</h1>
+<p>Now, let&#39;s implement our additional RSS feeds. First, we&#39;ll write a test for the category feed. Add this to the <code>FeedTest</code> class:</p>
+<p>``` python blogengine/tests.py
+    def test_category_feed(self):</p>
+<pre><code>    <span class="comment"># Create a post</span>
+    post = PostFactory(<span class="type">text</span>='This <span class="keyword">is</span> <span class="keyword">my</span> *<span class="keyword">first</span>* blog post')
+
+    <span class="comment"># Create another post in a different category</span>
+    category = CategoryFactory(<span class="property">name</span>='perl', description='The Perl programming language', slug='perl')
+    post2 = PostFactory(<span class="type">text</span>='This <span class="keyword">is</span> <span class="keyword">my</span> *<span class="keyword">second</span>* blog post', title='My <span class="keyword">second</span> post', slug='<span class="keyword">my</span>-<span class="keyword">second</span>-post', category=category)
+
+    <span class="comment"># Fetch the feed</span>
+    response = self.client.<span class="keyword">get</span>('/feeds/posts/category/python/')
+    self.assertEquals(response.status_code, <span class="number">200</span>)
+
+    <span class="comment"># Parse the feed</span>
+    feed = feedparser.parse(response.content)
+
+    <span class="comment"># Check length</span>
+    self.assertEquals(len(feed.entries), <span class="number">1</span>)
+
+    <span class="comment"># Check post retrieved is the correct one</span>
+    feed_post = feed.entries[<span class="number">0</span>]
+    self.assertEquals(feed_post.title, post.title)
+    self.assertTrue('This <span class="keyword">is</span> <span class="keyword">my</span> &lt;em&gt;<span class="keyword">first</span>&lt;/em&gt; blog post' <span class="keyword">in</span> feed_post.description)
+
+    <span class="comment"># Check other post is not in this feed</span>
+    self.assertTrue('This <span class="keyword">is</span> <span class="keyword">my</span> &lt;em&gt;<span class="keyword">second</span>&lt;/em&gt; blog post' <span class="keyword">not</span> <span class="keyword">in</span> response.content)</code></pre>
+<pre><code>
+<span class="comment">Here</span> <span class="comment">we</span> <span class="comment">create</span> <span class="comment">two</span> <span class="comment">posts</span> <span class="comment">in</span> <span class="comment">different</span> <span class="comment">categories</span> <span class="comment">(note</span> <span class="comment">that</span> <span class="comment">we</span> <span class="comment">create</span> <span class="comment">a</span> <span class="comment">new</span> <span class="comment">category</span> <span class="comment">and</span> <span class="comment">override</span> <span class="comment">the</span> <span class="comment">post</span> <span class="comment">category</span> <span class="comment">for</span> <span class="comment">it)</span>. <span class="comment">We</span> <span class="comment">then</span> <span class="comment">fetch</span> <span class="comment">`/feeds/posts/category/python/'</span> <span class="comment">and</span> <span class="comment">assert</span> <span class="comment">that</span> <span class="comment">it</span> <span class="comment">contains</span> <span class="comment">only</span> <span class="comment">one</span> <span class="comment">post</span>, <span class="comment">with</span> <span class="comment">the</span> <span class="comment">content</span> <span class="comment">of</span> <span class="comment">the</span> <span class="comment">first</span> <span class="comment">post</span> <span class="comment">and</span> <span class="comment">not</span> <span class="comment">the</span> <span class="comment">content</span> <span class="comment">of</span> <span class="comment">the</span> <span class="comment">second</span>.
+
+<span class="comment">Run</span> <span class="comment">the</span> <span class="comment">tests</span> <span class="comment">and</span> <span class="comment">they</span> <span class="comment">should</span> <span class="comment">fail:</span>
+
+<span class="comment">```</span> <span class="comment">bash</span>
+<span class="comment">$</span> <span class="comment">python</span> <span class="comment">manage</span>.<span class="comment">py</span> <span class="comment">test</span> <span class="comment">blogengine</span>
+<span class="comment">Creating</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span>
+<span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="comment">F</span>.<span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span>
+<span class="comment">======================================================================</span>
+<span class="comment">FAIL:</span> <span class="comment">test_category_feed</span> <span class="comment">(blogengine</span>.<span class="comment">tests</span>.<span class="comment">FeedTest)</span>
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Traceback</span> <span class="comment">(most</span> <span class="comment">recent</span> <span class="comment">call</span> <span class="comment">last):</span>
+  <span class="comment">File</span> <span class="comment">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests</span>.<span class="comment">py"</span>, <span class="comment">line</span> <span class="comment">716</span>, <span class="comment">in</span> <span class="comment">test_category_feed</span>
+    <span class="comment">self</span>.<span class="comment">assertEquals(response</span>.<span class="comment">status_code</span>, <span class="comment">200)</span>
+<span class="comment">AssertionError:</span> <span class="comment">404</span> <span class="comment">!=</span> <span class="comment">200</span>
+
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Ran</span> <span class="comment">25</span> <span class="comment">tests</span> <span class="comment">in</span> <span class="comment">5</span>.<span class="comment">804s</span>
+
+<span class="comment">FAILED</span> <span class="comment">(failures=1)</span>
+<span class="comment">Destroying</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span></code></pre>
+<p>Because we haven&#39;t yet implemented that route, we get a 404 error. So let&#39;s create a route for this:</p>
+<p>``` python blogengine/urls.py
+from django.conf.urls import patterns, url
+from django.views.generic import ListView, DetailView
+from blogengine.models import Post, Category, Tag
+from blogengine.views import CategoryListView, TagListView, PostsFeed, CategoryPostsFeed</p>
+<p>urlpatterns = patterns(&#39;&#39;,</p>
+<pre><code><span class="comment"># Index</span>
+url(<span class="string">r'^(?P&lt;page&gt;\d+)?/?$'</span>, ListView.as_view(
+    model=Post,
+    paginate_by=<span class="number">5</span>,
+    )),
+
+<span class="comment"># Individual posts</span>
+url(<span class="string">r'^(?P&lt;pub_date__year&gt;\d{4})/(?P&lt;pub_date__month&gt;\d{1,2})/(?P&lt;slug&gt;[a-zA-Z0-9-]+)/?$'</span>, DetailView.as_view(
+    model=Post,
+    )),
+
+<span class="comment"># Categories</span>
+url(<span class="string">r'^category/(?P&lt;slug&gt;[a-zA-Z0-9-]+)/?$'</span>, CategoryListView.as_view(
+    paginate_by=<span class="number">5</span>,
+    model=Category,
+    )),
+
+<span class="comment"># Tags</span>
+url(<span class="string">r'^tag/(?P&lt;slug&gt;[a-zA-Z0-9-]+)/?$'</span>, TagListView.as_view(
+    paginate_by=<span class="number">5</span>,
+    model=Tag,
+    )),
+
+<span class="comment"># Post RSS feed</span>
+url(<span class="string">r'^feeds/posts/$'</span>, PostsFeed()),
+
+<span class="comment"># Category RSS feed</span>
+url(<span class="string">r'^feeds/posts/category/(?P&lt;slug&gt;[a-zA-Z0-9-]+)/?$'</span>, CategoryPostsFeed()),</code></pre>
+<p>)</p>
+<pre><code>
+Note <span class="keyword">that</span> <span class="keyword">the</span> category RSS feed route <span class="keyword">is</span> similar <span class="keyword">to</span> <span class="keyword">the</span> post RSS feed route, <span class="keyword">but</span> accepts a `slug` parameter. We will use this <span class="keyword">to</span> pass <span class="keyword">through</span> <span class="keyword">the</span> slug <span class="keyword">for</span> <span class="keyword">the</span> category <span class="keyword">in</span> question. Also note we import <span class="keyword">the</span> `CategoryPostsFeed` view. Now, we need <span class="keyword">to</span> create <span class="keyword">that</span> view. Fortunately, because <span class="keyword">it</span>'s written <span class="keyword">as</span> a Python <span class="type">class</span>, we can extend <span class="keyword">the</span> existing `PostsFeed` <span class="type">class</span>. Open up your views <span class="type">file</span> <span class="keyword">and</span> amend <span class="keyword">it</span> <span class="keyword">to</span> look like this:
+
+``` python blogengine/views.py
+<span class="keyword">from</span> django.shortcuts import get_object_or_404
+<span class="keyword">from</span> django.views.generic import ListView
+<span class="keyword">from</span> blogengine.models import Category, Post, Tag
+<span class="keyword">from</span> django.contrib.syndication.views import Feed
+<span class="keyword">from</span> django.utils.encoding import force_unicode
+<span class="keyword">from</span> django.utils.safestring import mark_safe
+import markdown2
+
+<span class="comment"># Create your views here.</span>
+<span class="type">class</span> CategoryListView(ListView):
+    def get_queryset(self):
+        slug = self.kwargs['slug']
+        <span class="keyword">try</span>:
+            category = Category.objects.<span class="keyword">get</span>(slug=slug)
+<span class="command">            return</span> Post.objects.filter(category=category)
+        except Category.DoesNotExist:
+<span class="command">            return</span> Post.objects.none()
+
+
+<span class="type">class</span> TagListView(ListView):
+    def get_queryset(self):
+        slug = self.kwargs['slug']
+        <span class="keyword">try</span>:
+            tag = Tag.objects.<span class="keyword">get</span>(slug=slug)
+<span class="command">            return</span> tag.post_set.all()
+        except Tag.DoesNotExist:
+<span class="command">            return</span> Post.objects.none()
+
+
+<span class="type">class</span> PostsFeed(Feed):
+    title = <span class="string">"RSS feed - posts"</span>
+    description = <span class="string">"RSS feed - blog posts"</span>
+    link = '/'
+
+    def items(self):
+<span class="command">        return</span> Post.objects.order_by('-pub_date')
+
+    def item_title(self, <span class="property">item</span>):
+<span class="command">        return</span> <span class="property">item</span>.title
+
+    def item_description(self, <span class="property">item</span>):
+        extras = [<span class="string">"fenced-code-blocks"</span>]
+        content = mark_safe(markdown2.markdown(force_unicode(<span class="property">item</span>.<span class="type">text</span>),
+                                               extras = extras))
+<span class="command">        return</span> content
+
+
+<span class="type">class</span> CategoryPostsFeed(PostsFeed):
+    def get_object(self, request, slug):
+<span class="command">        return</span> get_object_or_404(Category, slug=slug)
+
+    def title(self, obj):
+<span class="command">        return</span> <span class="string">"RSS feed - blog posts in category %s"</span> % obj.<span class="property">name</span>
+
+    def link(self, obj):
+<span class="command">        return</span> obj.get_absolute_url()
+
+    def description(self, obj):
+<span class="command">        return</span> <span class="string">"RSS feed - blog posts in category %s"</span> % obj.<span class="property">name</span>
+
+    def items(self, obj):
+<span class="command">        return</span> Post.objects.filter(category=obj).order_by('-pub_date')</code></pre>
+<p>Note that many of our fields don&#39;t have to be explicitly defined as they are inherited from <code>PostsFeed</code>. We can&#39;t hard-code the title, link or description because they depend on the category, so we instead define methods to return the appropriate text.</p>
+<p>Also note <code>get_object()</code> - we define this so that we can ensure the category exists. If it doesn&#39;t exist, then it returns a 404 error rather than showing an empty feed.</p>
+<p>We also override <code>items()</code> to filter it to just those posts that are in the given category.</p>
+<p>If you run the tests again, they should now pass:</p>
+<pre><code class="lang-bash">$ python manage.py test blogengine
+Creating test database <span class="keyword">for</span> alias <span class="string">'default'</span>...
+.........................
+----------------------------------------------------------------------
+Ran 25 tests <span class="keyword">in</span> 5.867s
+
+OK
+Destroying test database <span class="keyword">for</span> alias <span class="string">'default'</span>...</code></pre>
+<p>Let&#39;s commit our changes:</p>
+<pre><code class="lang-bash">git add blogengine/
+git commit -m <span class="string">'Implemented category RSS feed'</span></code></pre>
+<p>Now, we can get our category RSS feed, but how do we navigate to it? Let&#39;s add a link to each category page that directs a user to its RSS feed. To do so, we&#39;ll need to create a new template for category pages. First, let&#39;s add some code to our tests to ensure that the right template is used at all times. Add the following to the end of the <code>test_index</code> method of <code>PostViewTest</code>:</p>
+<p>``` python blogengine/tests.py</p>
+<pre><code>    <span class="comment"># Check the correct template was used</span>
+    <span class="keyword">self</span>.assertTemplateUsed(response, <span class="string">'blogengine/post_list.html'</span>)</code></pre>
+<pre><code>
+<span class="keyword">Then</span>, add this <span class="keyword">to</span> the <span class="keyword">end</span> <span class="keyword">of</span> `test_post_page`:
+
+``` python blogengine/tests.py
+
+        # Check the correct template was used
+        self.assertTemplateUsed(response, <span class="attribute">'blogengine</span>/post_detail.html')</code></pre>
+<p>Finally, add this to the end of <code>test_category_page</code>:</p>
+<p>``` python blogengine/tests.py</p>
+<pre><code>    <span class="comment"># Check the correct template was used</span>
+    <span class="keyword">self</span>.assertTemplateUsed(response, <span class="string">'blogengine/category_post_list.html'</span>)</code></pre>
+<pre><code>
+These assertions confirm which template was used to generate which request.
+
+Next, we head into our views file:
+
+``` python blogengine/views.py
+<span class="class"><span class="keyword">class</span> <span class="title">CategoryListView</span>(<span class="title">ListView</span>):
+    <span class="title">template_name</span> = '<span class="title">blogengine</span>/<span class="title">category_post_list</span>.<span class="title">html</span>'
+
+    <span class="title">def</span> <span class="title">get_queryset</span>(<span class="title">self</span>):
+        <span class="title">slug</span> = <span class="title">self</span>.<span class="title">kwargs</span>['<span class="title">slug</span>']
+        <span class="title">try</span>:
+            <span class="title">category</span> = <span class="title">Category</span>.<span class="title">objects</span>.<span class="title">get</span>(<span class="title">slug</span>=<span class="title">slug</span>)
+            <span class="title">return</span> <span class="title">Post</span>.<span class="title">objects</span>.<span class="title">filter</span>(<span class="title">category</span>=<span class="title">category</span>)
+        <span class="title">except</span> <span class="title">Category</span>.<span class="title">DoesNotExist</span>:
+            <span class="title">return</span> <span class="title">Post</span>.<span class="title">objects</span>.<span class="title">none</span>()
+
+    <span class="title">def</span> <span class="title">get_context_data</span>(<span class="title">self</span>, **<span class="title">kwargs</span>):
+        <span class="title">context</span> = <span class="title">super</span>(<span class="title">CategoryListView</span>, <span class="title">self</span>).<span class="title">get_context_data</span>(**<span class="title">kwargs</span>)
+        <span class="title">slug</span> = <span class="title">self</span>.<span class="title">kwargs</span>['<span class="title">slug</span>']
+        <span class="title">try</span>:
+            <span class="title">context</span>['<span class="title">category</span>'] = <span class="title">Category</span>.<span class="title">objects</span>.<span class="title">get</span>(<span class="title">slug</span>=<span class="title">slug</span>)
+        <span class="title">except</span> <span class="title">Category</span>.<span class="title">DoesNotExist</span>:
+            <span class="title">context</span>['<span class="title">category</span>'] = <span class="title">None</span>
+        <span class="title">return</span> <span class="title">context</span></code></pre>
+<p>Note that we first of all change the template used by this view. Then, we override <code>get_context_data</code> to add in additional data. What we&#39;re doing is getting the slug that was passed through, looking up any category for which it is the slug, and returning it as additional context data. Using this method, you can easily add additional data that you may wish to render in your Django templates.</p>
+<p>Finally, we create our new template:</p>
+<p>``` html templates/blogengine/category_post_list.html
+{% raw %}{% extends &quot;blogengine/includes/base.html&quot; %}</p>
+<pre><code><span class="template_tag">{% <span class="keyword">load</span> custom_markdown %}</span>
+
+<span class="template_tag">{% <span class="keyword">block</span> content %}</span>
+    <span class="template_tag">{% <span class="keyword">if</span> object_list %}</span>
+        <span class="template_tag">{% <span class="keyword">for</span> post <span class="keyword">in</span> object_list %}</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"post col-md-12"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">h1</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ post.get_absolute_url }}</span>"</span>&gt;</span><span class="variable">{{ post.title }}</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">h1</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">h3</span>&gt;</span><span class="variable">{{ post.pub_date }}</span><span class="tag">&lt;/<span class="title">h3</span>&gt;</span>
+        <span class="variable">{{ post.text<span class="filter">|custom</span>_markdown }}</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">if</span> post.category %}</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"col-md-12"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ post.category.get_absolute_url }}</span>"</span>&gt;</span><span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"label label-primary"</span>&gt;</span><span class="variable">{{ post.category.name }}</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+        <span class="template_tag">{% <span class="keyword">if</span> post.tags %}</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"col-md-12"</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">for</span> tag <span class="keyword">in</span> post.tags.all %}</span>
+        <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ tag.get_absolute_url }}</span>"</span>&gt;</span><span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"label label-success"</span>&gt;</span><span class="variable">{{ tag.name }}</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+        <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+    <span class="template_tag">{% <span class="keyword">else</span> %}</span>
+        <span class="tag">&lt;<span class="title">p</span>&gt;</span>No posts found<span class="tag">&lt;/<span class="title">p</span>&gt;</span>
+    <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+
+    <span class="tag">&lt;<span class="title">ul</span> <span class="attribute">class</span>=<span class="value">"pager"</span>&gt;</span>
+    <span class="template_tag">{% <span class="keyword">if</span> page_obj.has_previous %}</span>
+    <span class="tag">&lt;<span class="title">li</span> <span class="attribute">class</span>=<span class="value">"previous"</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/<span class="variable">{{ page_obj.previous_page_number }}</span>/"</span>&gt;</span>Previous Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+    <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+    <span class="template_tag">{% <span class="keyword">if</span> page_obj.has_next %}</span>
+    <span class="tag">&lt;<span class="title">li</span> <span class="attribute">class</span>=<span class="value">"next"</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/<span class="variable">{{ page_obj.next_page_number }}</span>/"</span>&gt;</span>Next Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+    <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+    <span class="tag">&lt;/<span class="title">ul</span>&gt;</span>
+
+    <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/feeds/posts/category/<span class="variable">{{ category.slug }}</span>/"</span>&gt;</span>RSS feed for category <span class="variable">{{ category.name }}</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+
+<span class="template_tag">{% <span class="keyword">endblock</span> %}</span><span class="template_tag">{% endraw %}</span></code></pre>
+<pre><code>
+<span class="comment">Note</span> <span class="comment">that</span> <span class="comment">the</span> <span class="comment">category</span> <span class="comment">has</span> <span class="comment">been</span> <span class="comment">passed</span> <span class="comment">through</span> <span class="comment">to</span> <span class="comment">the</span> <span class="comment">template</span> <span class="comment">and</span> <span class="comment">is</span> <span class="comment">now</span> <span class="comment">accessible</span>. <span class="comment">If</span> <span class="comment">you</span> <span class="comment">run</span> <span class="comment">the</span> <span class="comment">tests</span>, <span class="comment">they</span> <span class="comment">should</span> <span class="comment">now</span> <span class="comment">pass:</span>
+
+<span class="comment">```</span> <span class="comment">bash</span>
+<span class="comment">$</span> <span class="comment">python</span> <span class="comment">manage</span>.<span class="comment">py</span> <span class="comment">jenkins</span>
+<span class="comment">Creating</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span>
+<span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span>
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Ran</span> <span class="comment">25</span> <span class="comment">tests</span> <span class="comment">in</span> <span class="comment">7</span>.<span class="comment">232s</span>
+
+<span class="comment">OK</span>
+<span class="comment">Destroying</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span></code></pre>
+<p>With that done. we can commit our changes:</p>
+<pre><code class="lang-bash">git add templates/ blogengine/
+git commit -m <span class="string">'Added link to RSS feed from category page'</span></code></pre>
+<p>Next up, let&#39;s implement another RSS feed for tags. First, we&#39;ll implement our test:</p>
+<p>``` python blogengine/tests.py
+      def test_tag_feed(self):</p>
+<pre><code>      <span class="comment"># Create a post</span>
+      post = PostFactory(<span class="type">text</span>='This <span class="keyword">is</span> <span class="keyword">my</span> *<span class="keyword">first</span>* blog post')
+      tag = TagFactory()
+      post.tags.add(tag)
+      post.save()
+
+      <span class="comment"># Create another post with a different tag</span>
+      tag2 = TagFactory(<span class="property">name</span>='perl', description='The Perl programming language', slug='perl')
+      post2 = PostFactory(<span class="type">text</span>='This <span class="keyword">is</span> <span class="keyword">my</span> *<span class="keyword">second</span>* blog post', title='My <span class="keyword">second</span> post', slug='<span class="keyword">my</span>-<span class="keyword">second</span>-post')
+      post2.tags.add(tag2)
+      post2.save()
+
+      <span class="comment"># Fetch the feed</span>
+      response = self.client.<span class="keyword">get</span>('/feeds/posts/tag/python/')
+      self.assertEquals(response.status_code, <span class="number">200</span>)
+
+      <span class="comment"># Parse the feed</span>
+      feed = feedparser.parse(response.content)
+
+      <span class="comment"># Check length</span>
+      self.assertEquals(len(feed.entries), <span class="number">1</span>)
+
+      <span class="comment"># Check post retrieved is the correct one</span>
+      feed_post = feed.entries[<span class="number">0</span>]
+      self.assertEquals(feed_post.title, post.title)
+      self.assertTrue('This <span class="keyword">is</span> <span class="keyword">my</span> &lt;em&gt;<span class="keyword">first</span>&lt;/em&gt; blog post' <span class="keyword">in</span> feed_post.description)
+
+      <span class="comment"># Check other post is not in this feed</span>
+      self.assertTrue('This <span class="keyword">is</span> <span class="keyword">my</span> &lt;em&gt;<span class="keyword">second</span>&lt;/em&gt; blog post' <span class="keyword">not</span> <span class="keyword">in</span> response.content)</code></pre>
+<pre><code>
+<span class="comment">This</span> <span class="comment">is</span> <span class="comment">virtually</span> <span class="comment">identical</span> <span class="comment">to</span> <span class="comment">the</span> <span class="comment">test</span> <span class="comment">for</span> <span class="comment">the</span> <span class="comment">categroy</span> <span class="comment">feed</span>, <span class="comment">but</span> <span class="comment">we</span> <span class="comment">adjust</span> <span class="comment">it</span> <span class="comment">to</span> <span class="comment">work</span> <span class="comment">with</span> <span class="comment">the</span> <span class="comment">`Tag`</span> <span class="comment">attribute</span> <span class="comment">and</span> <span class="comment">change</span> <span class="comment">the</span> <span class="comment">URL</span>. <span class="comment">Let's</span> <span class="comment">check</span> <span class="comment">that</span> <span class="comment">our</span> <span class="comment">test</span> <span class="comment">fails:</span>
+
+<span class="comment">```</span> <span class="comment">bash</span>
+<span class="comment">$</span> <span class="comment">python</span> <span class="comment">manage</span>.<span class="comment">py</span> <span class="comment">test</span> <span class="comment">blogengine</span>
+<span class="comment">Creating</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span>
+<span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="comment">F</span>.<span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span>
+<span class="comment">======================================================================</span>
+<span class="comment">FAIL:</span> <span class="comment">test_tag_feed</span> <span class="comment">(blogengine</span>.<span class="comment">tests</span>.<span class="comment">FeedTest)</span>
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Traceback</span> <span class="comment">(most</span> <span class="comment">recent</span> <span class="comment">call</span> <span class="comment">last):</span>
+  <span class="comment">File</span> <span class="comment">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests</span>.<span class="comment">py"</span>, <span class="comment">line</span> <span class="comment">757</span>, <span class="comment">in</span> <span class="comment">test_tag_feed</span>
+    <span class="comment">self</span>.<span class="comment">assertEquals(response</span>.<span class="comment">status_code</span>, <span class="comment">200)</span>
+<span class="comment">AssertionError:</span> <span class="comment">404</span> <span class="comment">!=</span> <span class="comment">200</span>
+
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Ran</span> <span class="comment">26</span> <span class="comment">tests</span> <span class="comment">in</span> <span class="comment">5</span>.<span class="comment">760s</span>
+
+<span class="comment">FAILED</span> <span class="comment">(failures=1)</span>
+<span class="comment">Destroying</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span></code></pre>
+<p>As before, we create a route for this:</p>
+<p>``` python blogengine/urls.py
+from django.conf.urls import patterns, url
+from django.views.generic import ListView, DetailView
+from blogengine.models import Post, Category, Tag
+from blogengine.views import CategoryListView, TagListView, PostsFeed, CategoryPostsFeed, TagPostsFeed</p>
+<p>urlpatterns = patterns(&#39;&#39;,</p>
+<pre><code><span class="comment"># Index</span>
+url(<span class="string">r'^(?P&lt;page&gt;\d+)?/?$'</span>, ListView.as_view(
+    model=Post,
+    paginate_by=<span class="number">5</span>,
+    )),
+
+<span class="comment"># Individual posts</span>
+url(<span class="string">r'^(?P&lt;pub_date__year&gt;\d{4})/(?P&lt;pub_date__month&gt;\d{1,2})/(?P&lt;slug&gt;[a-zA-Z0-9-]+)/?$'</span>, DetailView.as_view(
+    model=Post,
+    )),
+
+<span class="comment"># Categories</span>
+url(<span class="string">r'^category/(?P&lt;slug&gt;[a-zA-Z0-9-]+)/?$'</span>, CategoryListView.as_view(
+    paginate_by=<span class="number">5</span>,
+    model=Category,
+    )),
+
+<span class="comment"># Tags</span>
+url(<span class="string">r'^tag/(?P&lt;slug&gt;[a-zA-Z0-9-]+)/?$'</span>, TagListView.as_view(
+    paginate_by=<span class="number">5</span>,
+    model=Tag,
+    )),
+
+<span class="comment"># Post RSS feed</span>
+url(<span class="string">r'^feeds/posts/$'</span>, PostsFeed()),
+
+<span class="comment"># Category RSS feed</span>
+url(<span class="string">r'^feeds/posts/category/(?P&lt;slug&gt;[a-zA-Z0-9-]+)/?$'</span>, CategoryPostsFeed()),
+
+<span class="comment"># Tag RSS feed</span>
+url(<span class="string">r'^feeds/posts/tag/(?P&lt;slug&gt;[a-zA-Z0-9-]+)/?$'</span>, TagPostsFeed()),</code></pre>
+<p>)</p>
+<pre><code>
+Next, we create our view:
+
+``` python blogengine/views.py
+<span class="class"><span class="keyword">class</span> <span class="title">TagPostsFeed</span><span class="params">(PostsFeed)</span>:</span>
+    <span class="function"><span class="keyword">def</span> <span class="title">get_object</span><span class="params">(self, request, slug)</span>:</span>
+        <span class="keyword">return</span> get_object_or_404(Tag, slug=slug)
+
+    <span class="function"><span class="keyword">def</span> <span class="title">title</span><span class="params">(self, obj)</span>:</span>
+        <span class="keyword">return</span> <span class="string">"RSS feed - blog posts tagged  %s"</span> % obj.name
+
+    <span class="function"><span class="keyword">def</span> <span class="title">link</span><span class="params">(self, obj)</span>:</span>
+        <span class="keyword">return</span> obj.get_absolute_url()
+
+    <span class="function"><span class="keyword">def</span> <span class="title">description</span><span class="params">(self, obj)</span>:</span>
+        <span class="keyword">return</span> <span class="string">"RSS feed - blog posts tagged %s"</span> % obj.name
+
+    <span class="function"><span class="keyword">def</span> <span class="title">items</span><span class="params">(self, obj)</span>:</span>
+        <span class="keyword">try</span>:
+            tag = Tag.objects.get(slug=obj.slug)
+            <span class="keyword">return</span> tag.post_set.all()
+        <span class="keyword">except</span> Tag.DoesNotExist:
+            <span class="keyword">return</span> Post.objects.none()</code></pre>
+<p>Again, this inherits from <code>PostsFeed</code>, but the syntax for getting posts matching a tag is slightly different because they use a many-to-many relationship.</p>
+<p>We also need a template for the tag pages. Add this to the end of the <code>test_tag_page</code> method:</p>
+<p>``` python blogengine/tests.py</p>
+<pre><code>    <span class="comment"># Check the correct template was used</span>
+    <span class="keyword">self</span>.assertTemplateUsed(response, <span class="string">'blogengine/tag_post_list.html'</span>)</code></pre>
+<pre><code>
+Let's create that template:
+
+``` html templates/blogengine/tag_post_list.html
+<span class="template_tag">{% raw %}</span><span class="template_tag">{% <span class="keyword">extends</span> "blogengine/includes/base.html" %}</span>
+
+    <span class="template_tag">{% <span class="keyword">load</span> custom_markdown %}</span>
+
+    <span class="template_tag">{% <span class="keyword">block</span> content %}</span>
+        <span class="template_tag">{% <span class="keyword">if</span> object_list %}</span>
+            <span class="template_tag">{% <span class="keyword">for</span> post <span class="keyword">in</span> object_list %}</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"post col-md-12"</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">h1</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ post.get_absolute_url }}</span>"</span>&gt;</span><span class="variable">{{ post.title }}</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">h1</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">h3</span>&gt;</span><span class="variable">{{ post.pub_date }}</span><span class="tag">&lt;/<span class="title">h3</span>&gt;</span>
+            <span class="variable">{{ post.text<span class="filter">|custom</span>_markdown }}</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+            <span class="template_tag">{% <span class="keyword">if</span> post.category %}</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"col-md-12"</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ post.category.get_absolute_url }}</span>"</span>&gt;</span><span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"label label-primary"</span>&gt;</span><span class="variable">{{ post.category.name }}</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+            <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+            <span class="template_tag">{% <span class="keyword">if</span> post.tags %}</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"col-md-12"</span>&gt;</span>
+            <span class="template_tag">{% <span class="keyword">for</span> tag <span class="keyword">in</span> post.tags.all %}</span>
+            <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ tag.get_absolute_url }}</span>"</span>&gt;</span><span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"label label-success"</span>&gt;</span><span class="variable">{{ tag.name }}</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+            <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+            <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+            <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+        <span class="template_tag">{% <span class="keyword">else</span> %}</span>
+            <span class="tag">&lt;<span class="title">p</span>&gt;</span>No posts found<span class="tag">&lt;/<span class="title">p</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+
+        <span class="tag">&lt;<span class="title">ul</span> <span class="attribute">class</span>=<span class="value">"pager"</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">if</span> page_obj.has_previous %}</span>
+        <span class="tag">&lt;<span class="title">li</span> <span class="attribute">class</span>=<span class="value">"previous"</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/<span class="variable">{{ page_obj.previous_page_number }}</span>/"</span>&gt;</span>Previous Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+        <span class="template_tag">{% <span class="keyword">if</span> page_obj.has_next %}</span>
+        <span class="tag">&lt;<span class="title">li</span> <span class="attribute">class</span>=<span class="value">"next"</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/<span class="variable">{{ page_obj.next_page_number }}</span>/"</span>&gt;</span>Next Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+        <span class="tag">&lt;/<span class="title">ul</span>&gt;</span>
+
+        <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/feeds/posts/tag/<span class="variable">{{ tag.slug }}</span>/"</span>&gt;</span>RSS feed for tag <span class="variable">{{ tag.name }}</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+
+    <span class="template_tag">{% <span class="keyword">endblock</span> %}</span><span class="template_tag">{% endraw %}</span></code></pre>
+<p>This is virtually identical to the category template. You&#39;ll also need to apply this template in the view for the tag list, and pass the tag name through as context data:</p>
+<p>``` python blogengine/views.py
+class TagListView(ListView):
+    template_name = &#39;blogengine/tag_post_list.html&#39;</p>
+<pre><code><span class="function"><span class="keyword">def</span> <span class="title">get_queryset</span><span class="params">(self)</span>:</span>
+    slug = self.kwargs[<span class="string">'slug'</span>]
+    <span class="keyword">try</span>:
+        tag = Tag.objects.get(slug=slug)
+        <span class="keyword">return</span> tag.post_set.all()
+    <span class="keyword">except</span> Tag.DoesNotExist:
+        <span class="keyword">return</span> Post.objects.none()
+
+<span class="function"><span class="keyword">def</span> <span class="title">get_context_data</span><span class="params">(self, **kwargs)</span>:</span>
+    context = super(TagListView, self).get_context_data(**kwargs)
+    slug = self.kwargs[<span class="string">'slug'</span>]
+    <span class="keyword">try</span>:
+        context[<span class="string">'tag'</span>] = Tag.objects.get(slug=slug)
+    <span class="keyword">except</span> Tag.DoesNotExist:
+        context[<span class="string">'tag'</span>] = <span class="built_in">None</span>
+    <span class="keyword">return</span> context</code></pre>
+<pre><code>
+<span class="comment">Let's</span> <span class="comment">run</span> <span class="comment">our</span> <span class="comment">tests:</span>
+
+<span class="comment">```</span> <span class="comment">bash</span>
+<span class="comment">$</span> <span class="comment">python</span> <span class="comment">manage</span>.<span class="comment">py</span> <span class="comment">test</span> <span class="comment">blogengine</span>
+<span class="comment">Creating</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span>
+<span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span>
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Ran</span> <span class="comment">26</span> <span class="comment">tests</span> <span class="comment">in</span> <span class="comment">5</span>.<span class="comment">770s</span>
+
+<span class="comment">OK</span>
+<span class="comment">Destroying</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span></code></pre>
+<p>You may want to do a quick check to ensure your tag feed link works as expected. Time to commit:</p>
+<pre><code class="lang-bash">git add blogengine templates
+git commit -m <span class="string">'Implemented tag feeds'</span></code></pre>
+<h1 id="moving-our-templates">Moving our templates</h1>
+<p>Before we crack on with implementing search, there&#39;s one more piece of housekeeping. In Django, templates can be applied at project level or at app level. So far, we&#39;ve been storing them in the project, but we would like our app to be as self-contained as possible so it can just be dropped into future projects where we need a blog. That way, it can be easily overridden for specific projects. You can move the folders and update the Git repository at the same time with this command:</p>
+<pre><code class="lang-bash">git mv templates/ blogengine/</code></pre>
+<p>We run the tests to make sure nothing untoward has happened:</p>
+<pre><code class="lang-bash">$ python manage.py test
+Creating test database <span class="keyword">for</span> alias <span class="string">'default'</span>...
+..........................
+----------------------------------------------------------------------
+Ran 26 tests <span class="keyword">in</span> 5.847s
+
+OK
+Destroying test database <span class="keyword">for</span> alias <span class="string">'default'</span>...</code></pre>
+<p>And we commit:</p>
+<pre><code class="lang-bash">git commit -m <span class="string">'Moved templates'</span></code></pre>
+<p>Note that <code>git mv</code> updates Git and moves the files, so you don&#39;t need to call <code>git add</code>.</p>
+<h1 id="implementing-search">Implementing search</h1>
+<p>For our final task today, we will be implementing a very simple search engine. Our requirements are:</p>
+<ul>
+<li>It should be in the header, to allow for easy access from anywhere in the front end.</li>
+<li>It should search the title and text of posts.</li>
+</ul>
+<p>First, we&#39;ll write our tests:</p>
+<p>``` python blogengine/tests.py
+class SearchViewTest(BaseAcceptanceTest):
+    def test_search(self):</p>
+<pre><code>    # <span class="operator"><span class="keyword">Create</span> a post
+    post = PostFactory()
+
+    # <span class="keyword">Create</span> another post
+    post2 = PostFactory(text=<span class="string">'This is my *second* blog post'</span>, title=<span class="string">'My second post'</span>, slug=<span class="string">'my-second-post'</span>)
+
+    # Search <span class="keyword">for</span> <span class="keyword">first</span> post
+    response = self.client.<span class="keyword">get</span>(<span class="string">'/search?q=first'</span>)
+    self.assertEquals(response.status_code, <span class="number">200</span>)
+
+    # <span class="keyword">Check</span> the <span class="keyword">first</span> post <span class="keyword">is</span> contained <span class="keyword">in</span> the results
+    self.assertTrue(<span class="string">'My first post'</span> <span class="keyword">in</span> response.content)
+
+    # <span class="keyword">Check</span> the <span class="keyword">second</span> post <span class="keyword">is</span> <span class="keyword">not</span> contained <span class="keyword">in</span> the results
+    self.assertTrue(<span class="string">'My second post'</span> <span class="keyword">not</span> <span class="keyword">in</span> response.content)
+
+    # Search <span class="keyword">for</span> <span class="keyword">second</span> post
+    response = self.client.<span class="keyword">get</span>(<span class="string">'/search?q=second'</span>)
+    self.assertEquals(response.status_code, <span class="number">200</span>)
+
+    # <span class="keyword">Check</span> the <span class="keyword">first</span> post <span class="keyword">is</span> <span class="keyword">not</span> contained <span class="keyword">in</span> the results
+    self.assertTrue(<span class="string">'My first post'</span> <span class="keyword">not</span> <span class="keyword">in</span> response.content)
+
+    # <span class="keyword">Check</span> the <span class="keyword">second</span> post <span class="keyword">is</span> contained <span class="keyword">in</span> the results
+    self.assertTrue(<span class="string">'My second post'</span> <span class="keyword">in</span> response.content)</code></pre>
+<pre><code>
+<span class="comment">Don't</span> <span class="comment">forget</span> <span class="comment">to</span> <span class="comment">run</span> <span class="comment">the</span> <span class="comment">tests</span> <span class="comment">to</span> <span class="comment">make</span> <span class="comment">sure</span> <span class="comment">they</span> <span class="comment">fail:</span>
+
+<span class="comment">```</span> <span class="comment">bash</span>
+ <span class="comment">python</span> <span class="comment">manage</span>.<span class="comment">py</span> <span class="comment">test</span>
+<span class="comment">Creating</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span>
+<span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="comment">F</span>
+<span class="comment">======================================================================</span>
+<span class="comment">FAIL:</span> <span class="comment">test_search</span> <span class="comment">(blogengine</span>.<span class="comment">tests</span>.<span class="comment">SearchViewTest)</span>
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Traceback</span> <span class="comment">(most</span> <span class="comment">recent</span> <span class="comment">call</span> <span class="comment">last):</span>
+  <span class="comment">File</span> <span class="comment">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests</span>.<span class="comment">py"</span>, <span class="comment">line</span> <span class="comment">819</span>, <span class="comment">in</span> <span class="comment">test_search</span>
+    <span class="comment">self</span>.<span class="comment">assertEquals(response</span>.<span class="comment">status_code</span>, <span class="comment">200)</span>
+<span class="comment">AssertionError:</span> <span class="comment">404</span> <span class="comment">!=</span> <span class="comment">200</span>
+
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Ran</span> <span class="comment">27</span> <span class="comment">tests</span> <span class="comment">in</span> <span class="comment">6</span>.<span class="comment">919s</span>
+
+<span class="comment">FAILED</span> <span class="comment">(failures=1)</span>
+<span class="comment">Destroying</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span></code></pre>
+<p>With that done, we can add the search form to the header:</p>
+<p>``` html blogengine/templates/blogengine/includes/base.html
+{% raw %}&lt;!DOCTYPE html&gt;
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js"> <!--<![endif]-->
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title>{% block title %}My Django Blog{% endblock %}</title>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="alternate" type="application/rss+xml" title="Blog posts" href="/feeds/posts/" ></p>
+<pre><code>    <span class="comment">&lt;!-- Place favicon.ico and apple-touch-icon.png in the root directory --&gt;</span>
+
+    <span class="template_tag">{% <span class="keyword">load</span> staticfiles %}</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/html5-boilerplate/css/normalize.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/html5-boilerplate/css/main.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/bootstrap/dist/css/bootstrap.min.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/bootstrap/dist/css/bootstrap-theme.min.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'css/main.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'css/code.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span> <span class="attribute">src</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/html5-boilerplate/js/vendor/modernizr-2.6.2.min.js' %}</span>"</span>&gt;</span><span class="javascript"></span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+<span class="tag">&lt;/<span class="title">head</span>&gt;</span>
+<span class="tag">&lt;<span class="title">body</span>&gt;</span>
+    <span class="comment">&lt;!--[if lt IE 7]&gt;
+        &lt;p class="browsehappy"&gt;You are using an &lt;strong&gt;outdated&lt;/strong&gt; browser. Please &lt;a href="http://browsehappy.com/"&gt;upgrade your browser&lt;/a&gt; to improve your experience.&lt;/p&gt;
+    &lt;![endif]--&gt;</span>
+
+    <span class="comment">&lt;!-- Add your site or application content here --&gt;</span>
+
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">id</span>=<span class="value">"fb-root"</span>&gt;</span><span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span>&gt;</span><span class="javascript">(<span class="keyword">function</span>(d, s, id) {
+        <span class="keyword">var</span> js, fjs = d.getElementsByTagName(s)[<span class="number">0</span>];
+        <span class="keyword">if</span> (d.getElementById(id)) <span class="keyword">return</span>;
+            js = d.createElement(s); js.id = id;
+            js.src = <span class="string">"//connect.facebook.net/en_GB/all.js#xfbml=1"</span>;
+            fjs.parentNode.insertBefore(js, fjs);
+        }(document, <span class="string">'script'</span>, <span class="string">'facebook-jssdk'</span>));</span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"navbar navbar-static-top navbar-inverse"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"container-fluid"</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"navbar-header"</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">button</span> <span class="attribute">type</span>=<span class="value">"button"</span> <span class="attribute">class</span>=<span class="value">"navbar-toggle"</span> <span class="attribute">data-toggle</span>=<span class="value">"collapse"</span> <span class="attribute">data-target</span>=<span class="value">"#header-nav"</span>&gt;</span>
+                    <span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"icon-bar"</span>&gt;</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span>
+                    <span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"icon-bar"</span>&gt;</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span>
+                    <span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"icon-bar"</span>&gt;</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span>
+                <span class="tag">&lt;/<span class="title">button</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">a</span> <span class="attribute">class</span>=<span class="value">"navbar-brand"</span> <span class="attribute">href</span>=<span class="value">"/"</span>&gt;</span>My Django Blog<span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"collapse navbar-collapse"</span> <span class="attribute">id</span>=<span class="value">"header-nav"</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">ul</span> <span class="attribute">class</span>=<span class="value">"nav navbar-nav"</span>&gt;</span>
+                    <span class="template_tag">{% <span class="keyword">load</span> flatpages %}</span>
+                    <span class="template_tag">{% get_flatpages <span class="keyword">as</span> flatpages %}</span>
+                    <span class="template_tag">{% <span class="keyword">for</span> flatpage <span class="keyword">in</span> flatpages %}</span>
+                    <span class="tag">&lt;<span class="title">li</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ flatpage.url }}</span>"</span>&gt;</span><span class="variable">{{ flatpage.title }}</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+                    <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+                    <span class="tag">&lt;<span class="title">li</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/feeds/posts/"</span>&gt;</span>RSS feed<span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+
+                    <span class="tag">&lt;<span class="title">form</span> <span class="attribute">action</span>=<span class="value">"/search"</span> <span class="attribute">method</span>=<span class="value">"GET"</span> <span class="attribute">class</span>=<span class="value">"navbar-form navbar-left"</span>&gt;</span>
+                        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"form-group"</span>&gt;</span>
+                            <span class="tag">&lt;<span class="title">input</span> <span class="attribute">type</span>=<span class="value">"text"</span> <span class="attribute">name</span>=<span class="value">"q"</span> <span class="attribute">placeholder</span>=<span class="value">"Search..."</span> <span class="attribute">class</span>=<span class="value">"form-control"</span>&gt;</span><span class="tag">&lt;/<span class="title">input</span>&gt;</span>
+                        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+                        <span class="tag">&lt;<span class="title">button</span> <span class="attribute">type</span>=<span class="value">"submit"</span> <span class="attribute">class</span>=<span class="value">"btn btn-default"</span>&gt;</span>Search<span class="tag">&lt;/<span class="title">button</span>&gt;</span>
+                    <span class="tag">&lt;/<span class="title">form</span>&gt;</span>
+                <span class="tag">&lt;/<span class="title">ul</span>&gt;</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"container"</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">block</span> header %}</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"page-header"</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">h1</span>&gt;</span>My Django Blog<span class="tag">&lt;/<span class="title">h1</span>&gt;</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endblock</span> %}</span>
+
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"row"</span>&gt;</span>
+            <span class="template_tag">{% <span class="keyword">block</span> content %}</span><span class="template_tag">{% <span class="keyword">endblock</span> %}</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"container footer"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"row"</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"span12"</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">p</span>&gt;</span>Copyright &amp;copy; <span class="template_tag">{% <span class="keyword">now</span> "Y" %}</span><span class="tag">&lt;/<span class="title">p</span>&gt;</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+
+    <span class="tag">&lt;<span class="title">script</span> <span class="attribute">src</span>=<span class="value">"//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"</span>&gt;</span><span class="javascript"></span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span>&gt;</span><span class="javascript">window.jQuery || document.write(<span class="string">'&lt;script src="{% static '</span>bower_components/html5-boilerplate/js/vendor/jquery-<span class="number">1.10</span><span class="number">.2</span>.min.js<span class="string">' %}"&gt;&lt;\/script&gt;'</span>)</span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span> <span class="attribute">src</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/html5-boilerplate/js/plugins.js' %}</span>"</span>&gt;</span><span class="javascript"></span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span> <span class="attribute">src</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/bootstrap/dist/js/bootstrap.min.js' %}</span>"</span>&gt;</span><span class="javascript"></span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+
+    <span class="comment">&lt;!-- Google Analytics: change UA-XXXXX-X to be your site's ID. --&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span>&gt;</span><span class="javascript">
+        (<span class="keyword">function</span>(b,o,i,l,e,r){b.GoogleAnalyticsObject=l;b[l]||(b[l]=
+        <span class="keyword">function</span>(){(b[l].q=b[l].q||[]).push(arguments)});b[l].l=+<span class="keyword">new</span> Date;
+        e=o.createElement(i);r=o.getElementsByTagName(i)[<span class="number">0</span>];
+        e.src=<span class="string">'//www.google-analytics.com/analytics.js'</span>;
+        r.parentNode.insertBefore(e,r)}(window,document,<span class="string">'script'</span>,<span class="string">'ga'</span>));
+        ga(<span class="string">'create'</span>,<span class="string">'UA-XXXXX-X'</span>);ga(<span class="string">'send'</span>,<span class="string">'pageview'</span>);
+    </span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+<span class="tag">&lt;/<span class="title">body</span>&gt;</span></code></pre>
+<p></html>{% endraw %}</p>
+<pre><code>
+Now <span class="transposed_variable">we'</span>ll actually implement our <span class="transposed_variable">search.</span> Implementing search using <span class="transposed_variable">Django'</span>s generic views can be fiddly, so <span class="transposed_variable">we'</span>ll write our search view as a <span class="function"><span class="keyword">function</span> <span class="title">instead</span>. <span class="title">First</span>, <span class="title">amend</span> <span class="title">the</span> <span class="title">imports</span> <span class="title">at</span> <span class="title">the</span> <span class="title">top</span> <span class="title">of</span> <span class="title">your</span> <span class="title">view</span> <span class="title">file</span> <span class="title">to</span> <span class="title">look</span> <span class="title">like</span> <span class="title">this</span>:</span>
+
+``` python blogengine/<span class="transposed_variable">views.</span>py
+from <span class="transposed_variable">django.</span>shortcuts import get_object_or_404, render_to_response
+from <span class="transposed_variable">django.</span><span class="transposed_variable">core.</span>paginator import Paginator, EmptyPage
+from <span class="transposed_variable">django.</span><span class="transposed_variable">db.</span>models import Q
+from <span class="transposed_variable">django.</span><span class="transposed_variable">views.</span>generic import ListView
+from <span class="transposed_variable">blogengine.</span>models import Category, Post, Tag
+from <span class="transposed_variable">django.</span><span class="transposed_variable">contrib.</span><span class="transposed_variable">syndication.</span>views import Feed
+from <span class="transposed_variable">django.</span><span class="transposed_variable">utils.</span>encoding import force_unicode
+from <span class="transposed_variable">django.</span><span class="transposed_variable">utils.</span>safestring import mark_safe
+import markdown2</code></pre>
+<p>Next, add the following code to the end of the file:</p>
+<p>``` python blogengine/views.py
+def getSearchResults(request):
+    &quot;&quot;&quot;
+    Search for a post by title or text
+    &quot;&quot;&quot;</p>
+<pre><code># <span class="keyword">Get</span> the query data
+query = <span class="built_in">request</span>.<span class="keyword">GET</span>.<span class="keyword">get</span>(<span class="comment">'q', '')</span>
+page = <span class="built_in">request</span>.<span class="keyword">GET</span>.<span class="keyword">get</span>(<span class="comment">'page', 1)</span>
+
+# Query the database
+<span class="keyword">if</span> query:
+    results = Post.objects.<span class="built_in">filter</span>(Q(text__icontains=query) | Q(title__icontains=query))
+<span class="keyword">else</span>:
+    results = None
+
+# Add pagination
+pages = Paginator(results, <span class="number">5</span>)
+
+# <span class="keyword">Get</span> specified page
+try:
+    returned_page = pages.page(page)
+except EmptyPage:
+    returned_page = pages.page(pages.num_pages)
+
+# Display the search results
+return render_to_response(<span class="comment">'blogengine/search_post_list.html',</span>
+                          {<span class="comment">'page_obj': returned_page,</span>
+                           <span class="comment">'object_list': returned_page.object_list,</span>
+                           <span class="comment">'search': query})</span></code></pre>
+<pre><code>
+As this <span class="keyword">is</span> <span class="keyword">the</span> <span class="keyword">first</span> <span class="property">time</span> we've written a view <span class="keyword">without</span> using generic views, a little explanation <span class="keyword">is</span> called <span class="keyword">for</span>. First we <span class="keyword">get</span> <span class="keyword">the</span> values <span class="keyword">of</span> <span class="keyword">the</span> `q` <span class="keyword">and</span> `page` parameters passed <span class="keyword">to</span> <span class="keyword">the</span> view. `q` <span class="keyword">contains</span> <span class="keyword">the</span> query <span class="type">text</span> <span class="keyword">and</span> `page` <span class="keyword">contains</span> <span class="keyword">the</span> page <span class="type">number</span>. Note also <span class="keyword">that</span> our page defaults <span class="keyword">to</span> <span class="number">1</span> <span class="keyword">if</span> <span class="keyword">not</span> <span class="keyword">set</span>.
+
+We <span class="keyword">then</span> use <span class="keyword">the</span> Q object <span class="keyword">to</span> perform a query. The Django ORM will `AND` together keyword argument queries, <span class="keyword">but</span> <span class="keyword">that</span>'s <span class="keyword">not</span> <span class="keyword">the</span> behaviour we want here. Instead we want <span class="keyword">to</span> be able <span class="keyword">to</span> search <span class="keyword">for</span> content <span class="keyword">in</span> <span class="keyword">the</span> title <span class="keyword">or</span> <span class="type">text</span>, so we need <span class="keyword">to</span> use a query <span class="keyword">with</span> an `OR` statement, which necessitates using <span class="keyword">the</span> [Q](https://docs.djangoproject.com/en/dev/topics/db/queries/<span class="comment">#complex-lookups-with-q-objects) object.</span>
+
+Next, we use <span class="keyword">the</span> `Paginator` object <span class="keyword">to</span> manually paginate <span class="keyword">the</span> results, <span class="keyword">and</span> <span class="keyword">if</span> <span class="keyword">it</span> raises an `EmptyPage` exception, <span class="keyword">to</span> just show <span class="keyword">the</span> <span class="keyword">last</span> page instead. Finally we render <span class="keyword">the</span> template `blogengine/search_post_list.html`, <span class="keyword">and</span> pass <span class="keyword">through</span> <span class="keyword">the</span> parameters `page_obj` <span class="keyword">for</span> <span class="keyword">the</span> returned page, `object_list` <span class="keyword">for</span> <span class="keyword">the</span> objects, <span class="keyword">and</span> `search` <span class="keyword">for</span> <span class="keyword">the</span> query.
+
+We also need <span class="keyword">to</span> add a route <span class="keyword">for</span> our new view:
+
+``` python blogengine/urls.py
+
+    <span class="comment"># Search posts</span>
+    url(r'^search', 'blogengine.views.getSearchResults'),</code></pre>
+<p>Finally, let&#39;s create a new template to show our results:</p>
+<p>``` html blogengine/templates/blogengine/search_post_list.html
+{% raw %}{% extends &quot;blogengine/includes/base.html&quot; %}</p>
+<pre><code><span class="template_tag">{% <span class="keyword">load</span> custom_markdown %}</span>
+
+<span class="template_tag">{% <span class="keyword">block</span> content %}</span>
+    <span class="template_tag">{% <span class="keyword">if</span> object_list %}</span>
+        <span class="template_tag">{% <span class="keyword">for</span> post <span class="keyword">in</span> object_list %}</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"post col-md-12"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">h1</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ post.get_absolute_url }}</span>"</span>&gt;</span><span class="variable">{{ post.title }}</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">h1</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">h3</span>&gt;</span><span class="variable">{{ post.pub_date }}</span><span class="tag">&lt;/<span class="title">h3</span>&gt;</span>
+        <span class="variable">{{ post.text<span class="filter">|custom</span>_markdown }}</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">if</span> post.category %}</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"col-md-12"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ post.category.get_absolute_url }}</span>"</span>&gt;</span><span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"label label-primary"</span>&gt;</span><span class="variable">{{ post.category.name }}</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+        <span class="template_tag">{% <span class="keyword">if</span> post.tags %}</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"col-md-12"</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">for</span> tag <span class="keyword">in</span> post.tags.all %}</span>
+        <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ tag.get_absolute_url }}</span>"</span>&gt;</span><span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"label label-success"</span>&gt;</span><span class="variable">{{ tag.name }}</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+        <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+    <span class="template_tag">{% <span class="keyword">else</span> %}</span>
+        <span class="tag">&lt;<span class="title">p</span>&gt;</span>No posts found<span class="tag">&lt;/<span class="title">p</span>&gt;</span>
+    <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+
+    <span class="tag">&lt;<span class="title">ul</span> <span class="attribute">class</span>=<span class="value">"pager"</span>&gt;</span>
+    <span class="template_tag">{% <span class="keyword">if</span> page_obj.has_previous %}</span>
+    <span class="tag">&lt;<span class="title">li</span> <span class="attribute">class</span>=<span class="value">"previous"</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/search?page=<span class="variable">{{ page_obj.previous_page_number }}</span>&amp;q=<span class="variable">{{ search }}</span>"</span>&gt;</span>Previous Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+    <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+    <span class="template_tag">{% <span class="keyword">if</span> page_obj.has_next %}</span>
+    <span class="tag">&lt;<span class="title">li</span> <span class="attribute">class</span>=<span class="value">"next"</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/search?page=<span class="variable">{{ page_obj.next_page_number }}</span>&amp;q=<span class="variable">{{ search }}</span>"</span>&gt;</span>Next Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+    <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+    <span class="tag">&lt;/<span class="title">ul</span>&gt;</span>
+
+<span class="template_tag">{% <span class="keyword">endblock</span> %}</span><span class="template_tag">{% endraw %}</span></code></pre>
+<pre><code>
+<span class="comment">Let's</span> <span class="comment">run</span> <span class="comment">our</span> <span class="comment">tests:</span>
+
+<span class="comment">```</span> <span class="comment">bash</span>
+<span class="comment">$</span> <span class="comment">python</span> <span class="comment">manage</span>.<span class="comment">py</span> <span class="comment">test</span>
+<span class="comment">Creating</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span>
+<span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span><span class="string">.</span>
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Ran</span> <span class="comment">27</span> <span class="comment">tests</span> <span class="comment">in</span> <span class="comment">6</span>.<span class="comment">421s</span>
+
+<span class="comment">OK</span>
+<span class="comment">Destroying</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span></code></pre>
+<p>Don&#39;t forget to do a quick sense check to make sure it&#39;s all working as expected. Then it&#39;s time to commit:</p>
+<pre><code class="lang-bash">git add blogengine/
+git commit -m <span class="string">'Implemented search'</span></code></pre>
+<p>And push up your changes:</p>
+<pre><code class="lang-bash">git push origin master
+git push heroku master</code></pre>
+<p>And that&#39;s the end of this instalment. Please note this particular search solution is quite basic, and if you want something more powerful, you may want to look at <a href="http://haystacksearch.org/">Haystack</a>.</p>
+<p>As usual, you can get this lesson with <code>git checkout lesson-7</code> - if you have any problems, the <a href="https://github.com/matthewbdaly/django_tutorial_blog_ng">repository</a> should be the first place you look for answers as this is the working code base for the application, and with judicious use of a tool like <code>diff</code>, it&#39;s generally pretty easy to track down most issues.</p>
+<p>In our next, and final instalment, we&#39;ll cover:</p>
+<ul>
+<li>Tidying everything up</li>
+<li>Implementing an XML sitemap for search engines</li>
+<li>Optimising our site</li>
+<li>Using Fabric to make deployment easier</li>
+</ul>
+<p>Hope to see you then!</p>
+
+  </section>
+    <section>
+        <p>
+          25th August 2014
+          
+            by Matthew Daly
+          
+        </p>
+    </section>
+
+  <ul class="pager">
+      
+        <li><a href="/posts/2014-08-31-django-blog-tutorial-the-next-generation-part-8.html">Newer</a></li>
+      
+      
+        <li><a href="/posts/2014-05-25-django-blog-tutorial-the-next-generation-part-6.html">Older</a></li>
+      
+    </ul>
+  <section class="comments">
+    
+      <div id="disqus_thread"></div>
+      <script type="text/javascript">
+        window.disqus_identifier="";
+        window.disqus_url="http://www.matthewdaly.co.uk/posts/2014-08-25-django-blog-tutorial-the-next-generation-part-7.html";
+        window.disqus_title="Django Blog Tutorial - the Next Generation - Part 7";
+      </script>
+        <script type="text/javascript" src="http://disqus.com/forums/mattbd/embed.js"></script>
+        <noscript><a href="http://mattbd.disqus.com/?url=ref">View the discussion thread.</a></noscript>
+    
+    
+  </section>
+</article>
+
+        </div>
+
+        <footer>
+            <div class="container">
+                Copyright Matthew Daly, 2014.
+            </div>
+        </footer>
+        <script type="text/javascript" src="/static/js/dependencies.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script>
+    </body>
+</html>

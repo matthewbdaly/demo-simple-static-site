@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta property="fb:app_id" content=""/>
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/bootstrap-sass/dist/css/bootstrap.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/flat-ui/dist/css/flat-ui.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/highlightjs/styles/zenburn.css" media="all" />
+        <link rel="alternate" type="application/rss+xml" title="A Series of Quite Extraordinary Events - feed" href="/index.xml" />
+        <title>A Series of Quite Extraordinary Events - More on my mini server</title>
+    </head>
+    <body>
+        <header>
+            <div class="container">
+                <div class="page-header">
+                    <h1>A Series of Quite Extraordinary Events</h1>
+                    <h2>Being the blog of Matthew Daly Esquire</h2>
+                    <nav>
+                        <a href="/">Home</a> | <a href="/archive.html">Archives</a> | <a href="/about.html">About</a> | <a href="/rss.xml">RSS</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <article class="post">
+    
+  <div class="title">
+    <h1><a href="/posts/2011-02-21-more-on-my-mini-server.html">More on my mini server</a></h1>
+  </div>
+  <section>
+    <p>While I was very pleased to get a proper Linux distro working on my Pogoplug, the Arch-based Plugbox Linux was never really my cup of tea. While it&#39;s a fine distro, I always felt that Debian would have been a much better fit. Partly this is because Debian has established a strong history of being a solid, stable distro that would carry on working no matter what, whereas Arch is more bleeding-edge. Also, Debian has a colossal repository that included a lot of software I wanted that wasn&#39;t in the Arch repositories and I couldn&#39;t get to install or compile from source, such as procmail and Squirrelmail. Debian also has strong support for many different processor architectures, including armel. Finally, being an Ubuntu user on the desktop, Debian is a distro that feels much more familiar to me.</p>
+<p>So I eventually gave up on running Plugbox Linux and took the opportunity of the release of Debian Squeeze to install it on my Pogoplug, thanks to <a href="http://jeff.doozan.com/debian/">this tutorial</a>. With that done, I set about adding my favourite applications. Byobu is a really handy tool that makes GNU screen significantly more intuitive and useful, so that&#39;s always one of the first things to go on, and one that I&#39;d really missed in Plugbox. I&#39;ve now gotten my mail server working again, with the addition of procmail as my mail filter and Squirrelmail to give me a web interface. I&#39;ve also set up Leafnode on there as I&#39;d really like to learn more about Usenet, and I&#39;m beginning to get the hang of using slrn to read it.</p>
+<p>It&#39;s amazing how much running my own server has taught me about security. I was staggered to see the sheer number of attempts by script kiddies to connect via SSH to my Pogoplug, and it really made me start thinking about security in a way I&#39;d never bothered beforehand. I&#39;ve installed denyhosts to block atttempts to brute-force the password, and made sure I chose a good password. I&#39;ve also set OpenSSH to listen on a different port, which should hopefully decrease the number of login attempts substantially (I presume most of these were just script kiddies scanning large blocks of IP addresses looking for hosts with port 22 open), and have disabled root login (as at right now my login is the only one that is allowed via SSH, so if anyone does bother to do a more thorough scan and try to connect to the port I&#39;m running SSH on, they&#39;ll need to guess my username AND password, and do so before denyhosts kicks them off - a pretty tall order).</p>
+<p>The whole concept of &quot;plug servers&quot; is one I really like, and my experience with the Pogoplug has been extremely good - it&#39;s an inexpensive and extremely hackable device that has been an absolute pleasure to use.</p>
+
+  </section>
+    <section>
+        <p>
+          21st February 2011
+          
+            by Matthew Daly
+          
+        </p>
+    </section>
+
+  <ul class="pager">
+      
+        <li><a href="/posts/2011-03-30-new-phone.html">Newer</a></li>
+      
+      
+        <li><a href="/posts/2011-01-24-my-new-mini-server.html">Older</a></li>
+      
+    </ul>
+  <section class="comments">
+    
+      <div id="disqus_thread"></div>
+      <script type="text/javascript">
+        window.disqus_identifier="";
+        window.disqus_url="http://www.matthewdaly.co.uk/posts/2011-02-21-more-on-my-mini-server.html";
+        window.disqus_title="More on my mini server";
+      </script>
+        <script type="text/javascript" src="http://disqus.com/forums/mattbd/embed.js"></script>
+        <noscript><a href="http://mattbd.disqus.com/?url=ref">View the discussion thread.</a></noscript>
+    
+    
+  </section>
+</article>
+
+        </div>
+
+        <footer>
+            <div class="container">
+                Copyright Matthew Daly, 2014.
+            </div>
+        </footer>
+        <script type="text/javascript" src="/static/js/dependencies.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script>
+    </body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta property="fb:app_id" content=""/>
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/bootstrap-sass/dist/css/bootstrap.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/flat-ui/dist/css/flat-ui.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/highlightjs/styles/zenburn.css" media="all" />
+        <link rel="alternate" type="application/rss+xml" title="A Series of Quite Extraordinary Events - feed" href="/index.xml" />
+        <title>A Series of Quite Extraordinary Events - JavaScript Example</title>
+    </head>
+    <body>
+        <header>
+            <div class="container">
+                <div class="page-header">
+                    <h1>A Series of Quite Extraordinary Events</h1>
+                    <h2>Being the blog of Matthew Daly Esquire</h2>
+                    <nav>
+                        <a href="/">Home</a> | <a href="/archive.html">Archives</a> | <a href="/about.html">About</a> | <a href="/rss.xml">RSS</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <article class="post">
+    
+  <div class="title">
+    <h1><a href="/posts/2014-10-05-javascript-example.html">JavaScript Example</a></h1>
+  </div>
+  <section>
+    <h2 id="javascript-example">JavaScript example</h2>
+<pre><code class="lang-javascript">(<span class="function"><span class="keyword">function</span> <span class="params">($)</span> {</span>
+    <span class="string">'use strict'</span>;
+
+    <span class="keyword">var</span> methods = {
+        init: <span class="function"><span class="keyword">function</span> <span class="params">(options)</span> {</span>
+            <span class="comment">// Get the variables used</span>
+            <span class="keyword">var</span> clearlink, match, filter, filtertext, that = <span class="keyword">this</span>;
+
+            <span class="comment">// Create a case-insensitive version of :contains</span>
+            $.expr[<span class="string">':'</span>].icontains = <span class="function"><span class="keyword">function</span> <span class="params">(obj, index, meta, stack)</span> {</span>
+                <span class="keyword">return</span> (obj.textContent || obj.innerText || jQuery(obj).text() || <span class="string">''</span>).toLowerCase().indexOf(meta[<span class="number">3</span>].toLowerCase()) &gt;= <span class="number">0</span>;
+            };
+
+            <span class="comment">// Configure the default settings</span>
+            that.settings = $.extend({
+                <span class="string">'filter'</span>: <span class="literal">null</span>,
+                <span class="string">'clearlink'</span>: <span class="literal">null</span>,
+                <span class="string">'alternate'</span>: <span class="literal">null</span>,
+                <span class="string">'alternateclass'</span>: <span class="string">'alternate'</span>,
+                <span class="string">'callback'</span>: <span class="literal">null</span>
+            }, options);
+
+            <span class="comment">// Get the items</span>
+            that.items = that.children(<span class="string">'div, li'</span>);
+
+            <span class="comment">// If no filter element defined, prepend one to the list</span>
+            <span class="keyword">if</span> (that.settings.filter) {
+                filter = that.settings.filter;
+            } <span class="keyword">else</span> {
+                filter = $(<span class="string">'&lt;input&gt;&lt;/input&gt;'</span>, {
+                    type: <span class="string">"text"</span>
+                }).prependTo(<span class="keyword">this</span>);
+            }
+
+            <span class="comment">// If no clear link defined, append one after the filter</span>
+            <span class="keyword">if</span> (that.settings.clearlink) {
+                clearlink = that.settings.clearlink;
+            } <span class="keyword">else</span> {
+                clearlink = $(<span class="string">'&lt;a&gt;Clear&lt;/a&gt;'</span>).insertAfter(filter);
+            }
+
+            <span class="comment">// If alternate is set, amend the link styling to maintain alternation</span>
+            <span class="keyword">if</span> (that.settings.alternate) {
+                that.items.filter(<span class="string">':odd'</span>).addClass(that.settings.alternateclass);
+            }
+            <span class="comment">// When the contents of the filter change, update the list</span>
+            filter
+                .change(<span class="function"><span class="keyword">function</span> <span class="params">()</span> {</span>
+                    <span class="comment">// Get the value of the filter</span>
+                    filtertext = filter.val();
+
+                    <span class="comment">// Hide all the elements in the list</span>
+                    that.items.hide();
+
+                    <span class="comment">// If alternate is set, remove the alternate class from all the items</span>
+                    <span class="keyword">if</span> (that.settings.alternate) {
+                        that.items.removeClass(that.settings.alternateclass);
+                    }
+
+                    <span class="comment">// Get the ones that match the filter</span>
+                    <span class="keyword">if</span> (filtertext.length &lt; <span class="number">1</span>) {
+                        match = that.items;
+                    } <span class="keyword">else</span> {
+                        match = that.items.filter(<span class="string">':icontains('</span> + filtertext + <span class="string">')'</span>);
+                    }
+
+                    <span class="comment">// If alternate is set, amend the link styling to maintain alternation</span>
+                    <span class="keyword">if</span> (that.settings.alternate) {
+                        match.filter(<span class="string">':odd'</span>).addClass(that.settings.alternateclass);
+                    }
+
+                    <span class="comment">// Display them</span>
+                    match.show();
+                    that.settings.callback();
+                }).on(<span class="string">'keyup'</span>, <span class="function"><span class="keyword">function</span> <span class="params">()</span> {</span>
+                    filter.change();
+                });
+
+            <span class="comment">// When the clear link is clicked, clear the filter</span>
+            clearlink.on(<span class="string">'click'</span>, <span class="function"><span class="keyword">function</span> <span class="params">()</span> {</span>
+                filter.val(<span class="string">''</span>).change();
+            });
+
+            <span class="comment">// Return the jQuery object</span>
+            <span class="keyword">return</span> <span class="keyword">this</span>;
+        },
+        refresh: <span class="function"><span class="keyword">function</span> <span class="params">()</span> {</span>
+            <span class="comment">// Get a reference to the items in the list</span>
+            <span class="keyword">var</span> that = <span class="keyword">this</span>, filtertext, filter, match;
+            that.items = that.children(<span class="string">'div, li'</span>);
+
+            <span class="comment">// If alternate is set, remove the alternate class from all the items and reapply it as appropriate</span>
+            <span class="keyword">if</span> (that.settings.alternate) {
+                that.items.removeClass(that.settings.alternateclass);
+
+                <span class="comment">// If filter is not empty, allow for that</span>
+                filter = that.settings.filter;
+                filtertext = filter.val();
+                <span class="keyword">if</span> (filtertext.length &gt; <span class="number">0</span>) {
+                    match = that.items.filter(<span class="string">':icontains('</span> + filtertext + <span class="string">')'</span>);
+                    match.filter(<span class="string">':odd'</span>).addClass(that.settings.alternateclass);
+                } <span class="keyword">else</span> {
+                    that.items.filter(<span class="string">':odd'</span>).addClass(that.settings.alternateclass);
+                }
+            }
+        }
+    };
+
+    $.fn.listfilter = <span class="function"><span class="keyword">function</span> <span class="params">(method)</span> {</span>
+        <span class="comment">// Define response variable</span>
+        <span class="keyword">var</span> response;
+
+        <span class="comment">// Method calling login</span>
+        <span class="keyword">if</span> (methods[method]) {
+            response = methods[method].apply(<span class="keyword">this</span>, Array.prototype.slice.call(arguments, <span class="number">1</span>));
+        } <span class="keyword">else</span> <span class="keyword">if</span> (<span class="keyword">typeof</span> method === <span class="string">'object'</span> || !method) {
+            response = methods.init.apply(<span class="keyword">this</span>, arguments);
+        } <span class="keyword">else</span> {
+            $.error(<span class="string">'Method '</span> + method + <span class="string">' not available'</span>);
+        }
+        <span class="keyword">if</span> (response) {
+            <span class="keyword">return</span> response;
+        }
+    };
+}(jQuery));</code></pre>
+
+  </section>
+    <section>
+        <p>
+          5th October 2014
+          
+            by Matthew Daly
+          
+        </p>
+    </section>
+
+  <ul class="pager">
+      
+        <li><a href="/posts/2014-10-05-php-example.html">Newer</a></li>
+      
+      
+        <li><a href="/posts/2014-10-05-introducing-generator-simple-static-blog.html">Older</a></li>
+      
+    </ul>
+  <section class="comments">
+    
+      <div id="disqus_thread"></div>
+      <script type="text/javascript">
+        window.disqus_identifier="";
+        window.disqus_url="http://www.matthewdaly.co.uk/posts/2014-10-05-javascript-example.html";
+        window.disqus_title="JavaScript Example";
+      </script>
+        <script type="text/javascript" src="http://disqus.com/forums/mattbd/embed.js"></script>
+        <noscript><a href="http://mattbd.disqus.com/?url=ref">View the discussion thread.</a></noscript>
+    
+    
+  </section>
+</article>
+
+        </div>
+
+        <footer>
+            <div class="container">
+                Copyright Matthew Daly, 2014.
+            </div>
+        </footer>
+        <script type="text/javascript" src="/static/js/dependencies.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script>
+    </body>
+</html>

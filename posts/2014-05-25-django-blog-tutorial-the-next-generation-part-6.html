@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta property="fb:app_id" content=""/>
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/bootstrap-sass/dist/css/bootstrap.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/flat-ui/dist/css/flat-ui.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/highlightjs/styles/zenburn.css" media="all" />
+        <link rel="alternate" type="application/rss+xml" title="A Series of Quite Extraordinary Events - feed" href="/index.xml" />
+        <title>A Series of Quite Extraordinary Events - Django Blog Tutorial - the Next Generation - Part 6</title>
+    </head>
+    <body>
+        <header>
+            <div class="container">
+                <div class="page-header">
+                    <h1>A Series of Quite Extraordinary Events</h1>
+                    <h2>Being the blog of Matthew Daly Esquire</h2>
+                    <nav>
+                        <a href="/">Home</a> | <a href="/archive.html">Archives</a> | <a href="/about.html">About</a> | <a href="/rss.xml">RSS</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <article class="post">
+    
+  <div class="title">
+    <h1><a href="/posts/2014-05-25-django-blog-tutorial-the-next-generation-part-6.html">Django Blog Tutorial - the Next Generation - Part 6</a></h1>
+  </div>
+  <section>
+    <p>Welcome back! In this tutorial we&#39;ll cover the following:</p>
+<ul>
+<li>Fixing bugs the TDD way</li>
+<li>Setting up syntax highlighting for code snippets</li>
+<li>Tidying up the front end</li>
+</ul>
+<p>Apologies, but I&#39;m holding over implementing the search and additional feeds for a future instalment - in the past I&#39;ve tried to cover too much in one post and that has led to me putting them off for much too long. So this instalment and future ones are going to be shorter so I can get them out the door quicker.</p>
+<p>Ready? Let&#39;s get started!</p>
+<h1 id="fixing-bugs">Fixing bugs</h1>
+<p>When someone reports a bug, it&#39;s tempting to just dive straight in and start fixing it. But TDD cautions us against this practice. If we have a bug, then our tests should have caught it. If they don&#39;t, then before we fix the bug, we have to make sure we can catch it if it crops up in future by implementing a test for it, and ensuring that it fails. Once that test is in place, we can then go ahead and fix the bug, safe in the knowledge that if it should reappear in future, we will be warned when our tests run.</p>
+<p>As it happens, we have a bug in our web app. If you activate your virtualenv in the usual way and run the development server, and then try to create a new post without adding a tag, you&#39;ll see that it fails as the tag is empty. Now, it&#39;s pretty obvious that this is because the <code>tags</code> attribute of the <code>Post</code> model cannot be blank, so we have a good idea of what we need to do to fix this. But to make sure it never occurs again, we need to implement a test first.</p>
+<p>Add the following method to <code>AdminTest</code>:</p>
+<p>``` python blogengine/tests.py
+    def test_create_post_without_tag(self):</p>
+<pre><code>    # Create the category
+    category = Category()
+    category.name = <span class="comment">'python'</span>
+    category.description = <span class="comment">'The Python programming language'</span>
+    category.save()
+
+    # <span class="built_in">Log</span> <span class="keyword">in</span>
+    self.client.login(username=<span class="comment">'bobsmith', password="password")</span>
+
+    # Check <span class="built_in">response</span> code
+    <span class="built_in">response</span> = self.client.<span class="keyword">get</span>(<span class="comment">'/admin/blogengine/post/add/')</span>
+    self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)
+
+    # Create the <span class="keyword">new</span> post
+    <span class="built_in">response</span> = self.client.post(<span class="comment">'/admin/blogengine/post/add/', {</span>
+        <span class="comment">'title': 'My first post',</span>
+        <span class="comment">'text': 'This is my first post',</span>
+        <span class="comment">'pub_date_0': '2013-12-28',</span>
+        <span class="comment">'pub_date_1': '22:00:04',</span>
+        <span class="comment">'slug': 'my-first-post',</span>
+        <span class="comment">'site': '1',</span>
+        <span class="comment">'category': '1'</span>
+    },
+    follow=<span class="literal">True</span>
+    )
+    self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)
+
+    # Check added successfully
+    self.assertTrue(<span class="comment">'added successfully' in response.content)</span>
+
+    # Check <span class="keyword">new</span> post <span class="built_in">now</span> <span class="keyword">in</span> database
+    all_posts = Post.objects.all()
+    self.assertEquals(<span class="built_in">len</span>(all_posts), <span class="number">1</span>)</code></pre>
+<pre><code>
+This <span class="keyword">is</span> virtually identical <span class="keyword">to</span> our previous method <span class="keyword">for</span> adding a post, <span class="keyword">but</span> doesn't add a tag <span class="keyword">to</span> <span class="keyword">the</span> post. If you <span class="command">run</span> `python manage.py jenkins`, <span class="keyword">the</span> test should fail. Let's commit our changes:
+
+``` bash
+git add blogengine/tests.py
+git commit -m 'Added failing test <span class="keyword">for</span> posts <span class="keyword">without</span> tags'</code></pre>
+<p>Now we&#39;re in a position to fix our bug. Let&#39;s take a look at our models:</p>
+<p>``` python blogengine/models.py
+class Post(models.Model):
+    title = models.CharField(max_length=200)
+    pub_date = models.DateTimeField()
+    text = models.TextField()
+    slug = models.SlugField(max_length=40, unique=True)
+    author = models.ForeignKey(User)
+    site = models.ForeignKey(Site)
+    category = models.ForeignKey(Category, blank=True, null=True)
+    tags = models.ManyToManyField(Tag)</p>
+<pre><code>
+If you compare `category` and `tags`, you<span class="string">'ll immediately see that `category` has the additional parameters `blank` and `null` both set to `True`. So that'</span>s what we need to <span class="keyword">do</span> <span class="keyword">for</span> `tags` <span class="keyword">as</span> well. Amend the model to look like <span class="keyword">this</span>:
+
+``` python blogengine/models.py
+<span class="class"><span class="keyword">class</span> <span class="title">Post</span>(<span class="title">models</span>.<span class="title">Model</span>):
+    <span class="title">title</span> = <span class="title">models</span>.<span class="title">CharField</span>(<span class="title">max_length</span>=200)
+    <span class="title">pub_date</span> = <span class="title">models</span>.<span class="title">DateTimeField</span>()
+    <span class="title">text</span> = <span class="title">models</span>.<span class="title">TextField</span>()
+    <span class="title">slug</span> = <span class="title">models</span>.<span class="title">SlugField</span>(<span class="title">max_length</span>=40, <span class="title">unique</span>=<span class="title">True</span>)
+    <span class="title">author</span> = <span class="title">models</span>.<span class="title">ForeignKey</span>(<span class="title">User</span>)
+    <span class="title">site</span> = <span class="title">models</span>.<span class="title">ForeignKey</span>(<span class="title">Site</span>)
+    <span class="title">category</span> = <span class="title">models</span>.<span class="title">ForeignKey</span>(<span class="title">Category</span>, <span class="title">blank</span>=<span class="title">True</span>, <span class="title">null</span>=<span class="title">True</span>)
+    <span class="title">tags</span> = <span class="title">models</span>.<span class="title">ManyToManyField</span>(<span class="title">Tag</span>, <span class="title">blank</span>=<span class="title">True</span>, <span class="title">null</span>=<span class="title">True</span>)</code></pre>
+<p>You shouldn&#39;t have to create a migration for this. Let&#39;s run our tests:</p>
+<pre><code class="lang-bash">$ python manage.py jenkins --coverage-html-report=htmlcov
+Creating test database <span class="keyword">for</span> alias <span class="string">'default'</span>...
+.......................
+----------------------------------------------------------------------
+Ran 23 tests <span class="keyword">in</span> 7.634s
+
+OK
+Destroying test database <span class="keyword">for</span> alias <span class="string">'default'</span>...</code></pre>
+<p>Our tests pass! So we&#39;ve fixed our bug, and we&#39;ve ensured that if it happens again, we&#39;ll catch it. With that done, it&#39;s time to commit:</p>
+<pre><code class="lang-bash">git add blogengine/models.py
+git commit -m <span class="string">'Fixed a bug with the Post model'</span></code></pre>
+<p><strong>Remember</strong>: Always make the effort to create a test to reproduce your bug before fixing it. That way, you know you can catch it in future.</p>
+<h1 id="syntax-highlighting">Syntax highlighting</h1>
+<p>This is one feature that not everyone will want to implement. If you want to be able to show code snippets on your blog, then implementing syntax highlighting is well worth your time. However, if that&#39;s not what you want to use your blog for, feel free to skip over this section.</p>
+<p>Now, earlier in the series we implemented Markdown support. In Markdown there are two main ways to denote a code block. One is to indent the code by four spaces, while the other is to use <a href="https://help.github.com/articles/github-flavored-markdown#syntax-highlighting">fenced code blocks with syntax highlighting</a>. There are many flavours of Markdown available for Python, and unfortunately the one we&#39;ve been using so far doesn&#39;t support fenced code blocks, so we&#39;ll be switching to one that does.</p>
+<p>We also need to be able to generate a suitable stylesheet to highlight the code appropriately. For that, we&#39;ll be using <a href="http://pygments.org/">Pygments</a>. So let&#39;s first uninstall our existing implementation of Markdown:</p>
+<pre><code class="lang-bash">pip uninstall Markdown</code></pre>
+<p>And install the new modules:</p>
+<pre><code class="lang-bash">pip install markdown2 Pygments</code></pre>
+<p>Don&#39;t forget to record the changes:</p>
+<pre><code class="lang-bash">pip freeze &gt; requirements.txt</code></pre>
+<p>Now, we need to amend our Markdown template tags to use the new version of Markdown:</p>
+<p>``` python blogengine/templatetags/custom_markdown.py
+import markdown2</p>
+<p>from django import template
+from django.template.defaultfilters import stringfilter
+from django.utils.encoding import force_unicode
+from django.utils.safestring import mark_safe</p>
+<p>register = template.Library()</p>
+<p>@register.filter(is_safe=True)
+@stringfilter
+def custom_markdown(value):
+    extras = [&quot;fenced-code-blocks&quot;]</p>
+<pre><code><span class="keyword">return</span> mark_safe(markdown2.markdown(force_unicode(<span class="keyword">value</span>),
+                                   extras = extras))</code></pre>
+<pre><code>
+All we do here <span class="keyword">is</span> change <span class="keyword">the</span> Markdown module <span class="keyword">that</span> gets imported, <span class="keyword">and</span> amend how <span class="keyword">it</span> <span class="keyword">is</span> called. Note <span class="keyword">that</span> we pass <span class="keyword">through</span> <span class="keyword">the</span> parameter `fenced-code-blocks` <span class="keyword">to</span> enable this functionality.
+
+If you now <span class="command">run</span> <span class="keyword">the</span> development server <span class="keyword">and</span> create a post <span class="keyword">with</span> <span class="keyword">some</span> code <span class="keyword">in</span> <span class="keyword">it</span> (just <span class="keyword">copy</span> <span class="keyword">the</span> Ruby example <span class="keyword">from</span> [here](https://help.github.com/articles/github-flavored-markdown<span class="comment">#syntax-highlighting)), then view it on the site, you should be able to see that it's in a `&lt;code&gt;` block. However, it's not highlighted yet. Let's commit our changes:</span>
+
+``` bash
+git add requirements/txt blogengine/templatetags/custom_markdown.py
+git commit -m 'Now use Markdown2 <span class="keyword">to</span> allow <span class="keyword">for</span> syntax highlighting'</code></pre>
+<p>Now, if you examine the markup for your code blocks using your browser&#39;s developer tools, you&#39;ll notice that the code is wrapped in many different spans with various classes. Pygments can generate a CSS file that uses those classes to highlight your code.</p>
+<p>First, let&#39;s create a folder to store our CSS files in:</p>
+<pre><code class="lang-bash">mkdir blogengine/static/css</code></pre>
+<p>Next, we&#39;ll add a blank CSS file for any other styling we may want to apply:</p>
+<pre><code class="lang-bash">touch blogengine/static/css/main.css</code></pre>
+<p>Then, we generate our CSS file:</p>
+<pre><code class="lang-bash">pygmentize -S default -f html &gt; blogengine/static/css/code.css</code></pre>
+<p>We need to include our CSS files in our HTML template:</p>
+<p>``` html templates/blogengine/includes/base.html
+{% raw %}&lt;!DOCTYPE html&gt;
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js"> <!--<![endif]-->
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title>{% block title %}My Django Blog{% endblock %}</title>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1"></p>
+<pre><code>    <span class="comment">&lt;!-- Place favicon.ico and apple-touch-icon.png in the root directory --&gt;</span>
+
+    <span class="template_tag">{% <span class="keyword">load</span> staticfiles %}</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/html5-boilerplate/css/normalize.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/html5-boilerplate/css/main.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/bootstrap/dist/css/bootstrap.min.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/bootstrap/dist/css/bootstrap-theme.min.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'css/main.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'css/code.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span> <span class="attribute">src</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/html5-boilerplate/js/vendor/modernizr-2.6.2.min.js' %}</span>"</span>&gt;</span><span class="javascript"></span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+<span class="tag">&lt;/<span class="title">head</span>&gt;</span>
+<span class="tag">&lt;<span class="title">body</span>&gt;</span>
+    <span class="comment">&lt;!--[if lt IE 7]&gt;
+        &lt;p class="browsehappy"&gt;You are using an &lt;strong&gt;outdated&lt;/strong&gt; browser. Please &lt;a href="http://browsehappy.com/"&gt;upgrade your browser&lt;/a&gt; to improve your experience.&lt;/p&gt;
+    &lt;![endif]--&gt;</span>
+
+    <span class="comment">&lt;!-- Add your site or application content here --&gt;</span>
+
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">id</span>=<span class="value">"fb-root"</span>&gt;</span><span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span>&gt;</span><span class="javascript">(<span class="keyword">function</span>(d, s, id) {
+        <span class="keyword">var</span> js, fjs = d.getElementsByTagName(s)[<span class="number">0</span>];
+        <span class="keyword">if</span> (d.getElementById(id)) <span class="keyword">return</span>;
+            js = d.createElement(s); js.id = id;
+            js.src = <span class="string">"//connect.facebook.net/en_GB/all.js#xfbml=1"</span>;
+            fjs.parentNode.insertBefore(js, fjs);
+        }(document, <span class="string">'script'</span>, <span class="string">'facebook-jssdk'</span>));</span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"navbar navbar-static-top navbar-inverse"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"navbar-inner"</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"container"</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">a</span> <span class="attribute">class</span>=<span class="value">"btn btn-navbar"</span> <span class="attribute">data-toggle</span>=<span class="value">"collapse"</span> <span class="attribute">data-target</span>=<span class="value">".nav-collapse"</span>&gt;</span>
+                    <span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"icon-bar"</span>&gt;</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span>
+                    <span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"icon-bar"</span>&gt;</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span>
+                    <span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"icon-bar"</span>&gt;</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span>
+                <span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">a</span> <span class="attribute">class</span>=<span class="value">"brand"</span> <span class="attribute">href</span>=<span class="value">"/"</span>&gt;</span>My Django Blog<span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"nav-collapse collapse"</span>&gt;</span>
+                <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"container"</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">block</span> header %}</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"page-header"</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">h1</span>&gt;</span>My Django Blog<span class="tag">&lt;/<span class="title">h1</span>&gt;</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endblock</span> %}</span>
+
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"row"</span>&gt;</span>
+            <span class="template_tag">{% <span class="keyword">block</span> content %}</span><span class="template_tag">{% <span class="keyword">endblock</span> %}</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"container footer"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"row"</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"span12"</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">p</span>&gt;</span>Copyright &amp;copy; <span class="template_tag">{% <span class="keyword">now</span> "Y" %}</span><span class="tag">&lt;/<span class="title">p</span>&gt;</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+
+    <span class="tag">&lt;<span class="title">script</span> <span class="attribute">src</span>=<span class="value">"//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"</span>&gt;</span><span class="javascript"></span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span>&gt;</span><span class="javascript">window.jQuery || document.write(<span class="string">'&lt;script src="{% static '</span>bower_components/html5-boilerplate/js/vendor/jquery-<span class="number">1.10</span><span class="number">.2</span>.min.js<span class="string">' %}"&gt;&lt;\/script&gt;'</span>)</span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span> <span class="attribute">src</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/html5-boilerplate/js/plugins.js' %}</span>"</span>&gt;</span><span class="javascript"></span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span> <span class="attribute">src</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/bootstrap/dist/js/bootstrap.min.js' %}</span>"</span>&gt;</span><span class="javascript"></span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+
+    <span class="comment">&lt;!-- Google Analytics: change UA-XXXXX-X to be your site's ID. --&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span>&gt;</span><span class="javascript">
+        (<span class="keyword">function</span>(b,o,i,l,e,r){b.GoogleAnalyticsObject=l;b[l]||(b[l]=
+        <span class="keyword">function</span>(){(b[l].q=b[l].q||[]).push(arguments)});b[l].l=+<span class="keyword">new</span> Date;
+        e=o.createElement(i);r=o.getElementsByTagName(i)[<span class="number">0</span>];
+        e.src=<span class="string">'//www.google-analytics.com/analytics.js'</span>;
+        r.parentNode.insertBefore(e,r)}(window,document,<span class="string">'script'</span>,<span class="string">'ga'</span>));
+        ga(<span class="string">'create'</span>,<span class="string">'UA-XXXXX-X'</span>);ga(<span class="string">'send'</span>,<span class="string">'pageview'</span>);
+    </span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+<span class="tag">&lt;/<span class="title">body</span>&gt;</span></code></pre>
+<p></html>{% endraw %}</p>
+<pre><code>
+Now, <span class="keyword">if</span> you <span class="command">run</span> <span class="keyword">the</span> development server <span class="keyword">and</span> reload <span class="keyword">the</span> page, your code will be highlighted using <span class="keyword">the</span> default Pygments style. If you don't like <span class="keyword">it</span>, there are plenty <span class="keyword">to</span> choose <span class="keyword">from</span>. Run <span class="keyword">the</span> following command:
+
+``` bash
+pygmentize -L styles</code></pre>
+<p>That will list the various styles available. For instance, let&#39;s say we want to try the Tango style:</p>
+<pre><code class="lang-bash">pygmentize -S tango -f html &gt; blogengine/static/css/code.css</code></pre>
+<p>If you like the Monokai theme in Sublime Text, there&#39;s a Pygments version of that:</p>
+<pre><code class="lang-bash">pygmentize -S monokai -f html &gt; blogengine/static/css/code.css</code></pre>
+<p>If you like the Solarized theme, that&#39;s not bundled with Pygments, but can be installed separately:</p>
+<pre><code class="lang-bash">pip install pygments-style-solarized</code></pre>
+<p>Then run this for the light version:</p>
+<pre><code class="lang-bash">pygmentize -S solarizedlight -f html &gt; blogengine/static/css/code.css</code></pre>
+<p>And this for the dark version:</p>
+<pre><code class="lang-bash">pygmentize -S solarizeddark -f html &gt; blogengine/static/css/code.css</code></pre>
+<p>Pick one that you like - I&#39;m going to go for the dark version of Solarized.</p>
+<p>Note that this doesn&#39;t actually change the background colour of the code blocks. You will therefore need to set this manually using the CSS file we created earlier. If you&#39;re using Solarized Dark like I am, then this should set it correctly:</p>
+<p>``` css blogengine/static/css/main.css
+div.codehilite pre {
+    background-color: #002b36;
+}</p>
+<pre><code>
+If yo<span class="string">u're using Solarized Light, then this should be more appropriate:
+
+``` css blogengine/static/css/main.css
+div.codehilite pre {
+    background-color: #fdf6e3;
+}</code></pre>
+<p>Or, if you&#39;re using Monokai, black will do:</p>
+<p>``` css blogengine/static/css/main.css
+div.codehilite pre {
+    background-color: #000000;
+}</p>
+<pre><code>
+<span class="keyword">With</span> that done, let<span class="attribute">'s</span> <span class="keyword">record</span> the additional Pygments style:
+
+``` bash
+pip freeze &gt; requirements.txt</code></pre>
+<p>And commit our changes:</p>
+<pre><code class="lang-bash">git add requirements.txt blogengine/static/css/ templates/blogengine/includes/base.html
+git commit -m <span class="string">'Styled code with Solarized Dark'</span></code></pre>
+<p>Let&#39;s run our tests:</p>
+<pre><code class="lang-bash">$ python manage.py jenkins
+Creating test database <span class="keyword">for</span> alias <span class="string">'default'</span>...
+E
+======================================================================
+ERROR: blogengine.tests (unittest.loader.ModuleImportFailure)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: blogengine.tests
+Traceback (most recent call last):
+  File <span class="string">"/usr/local/Cellar/python/2.7.6_1/Frameworks/Python.framework/Versions/2.7/lib/python2.7/unittest/loader.py"</span>, line 254, <span class="keyword">in</span> _find_tests
+    module = self._get_module_from_name(name)
+  File <span class="string">"/usr/local/Cellar/python/2.7.6_1/Frameworks/Python.framework/Versions/2.7/lib/python2.7/unittest/loader.py"</span>, line 232, <span class="keyword">in</span> _get_module_from_name
+    __import__(name)
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 7, <span class="keyword">in</span> &lt;module&gt;
+    import markdown
+ImportError: No module named markdown
+
+
+----------------------------------------------------------------------
+Ran 1 test <span class="keyword">in</span> 0.001s
+
+FAILED (errors=1)
+Destroying test database <span class="keyword">for</span> alias <span class="string">'default'</span>...</code></pre>
+<p>Whoops! We introduced an error here. If we take a look, we can see that the problem is on line 7, where we import the Markdown module. That makes sense, as we now use a different implementation of Markdown. Fortunately, in Python you can import modules with a different name, which makes this a breeze to fix. Change the line to:</p>
+<p>``` python blogengine/tests.py
+import markdown2 as markdown</p>
+<pre><code>
+Now, <span class="keyword">if</span> you <span class="command">run</span> your tests, they should pass. It's important <span class="keyword">that</span> <span class="keyword">if</span> a test breaks, you fix <span class="keyword">it</span> <span class="keyword">as</span> soon <span class="keyword">as</span> possible <span class="keyword">and</span> don't <span class="keyword">put</span> <span class="keyword">it</span> off. Let's commit these changes:
+
+``` bash
+git add blogengine/tests.py
+git commit -m 'Fixed a broken test'</code></pre>
+<p>Our syntax highlighting is now done! If you want to see it in action using the Solarized Dark theme, check out the copy of this blogging engine hosted <a href="http://blog.shellshocked.info/">here</a>.</p>
+<h1 id="tidying-up">Tidying up</h1>
+<p>Now that our blog is up and running on Heroku, it could do with a bit of work on the front end to make it look a bit nicer. If you recall, we&#39;re using Bootstrap for our front end, so you may want to refer to the documentation for that to give you some ideas on how you want to style your blog.</p>
+<p>Bootstrap has a nifty pager class for Next and Previous links, so let&#39;s apply that to our post list template:</p>
+<p>``` html templates/blogengine/post_list.html
+{% raw %}<ul class="pager">
+        {% if page_obj.has_previous %}
+        <li class="previous"><a href="/{{ page_obj.previous_page_number }}/">Previous Page</a></li>
+        {% endif %}
+        {% if page_obj.has_next %}
+        <li class="next"><a href="/{{ page_obj.next_page_number }}/">Next Page</a></li>
+        {% endif %}
+        </ul>{% endraw %}</p>
+<pre><code>
+Let's also add labels to our categories and tags. We'll also place our posts and other content inside proper columns:
+
+``` html templates/blogengine/post_list.html
+<span class="template_tag">{% raw %}</span><span class="template_tag">{% <span class="keyword">extends</span> "blogengine/includes/base.html" %}</span>
+
+    <span class="template_tag">{% <span class="keyword">load</span> custom_markdown %}</span>
+
+    <span class="template_tag">{% <span class="keyword">block</span> content %}</span>
+        <span class="template_tag">{% <span class="keyword">if</span> object_list %}</span>
+            <span class="template_tag">{% <span class="keyword">for</span> post <span class="keyword">in</span> object_list %}</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"post col-md-12"</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">h1</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ post.get_absolute_url }}</span>"</span>&gt;</span><span class="variable">{{ post.title }}</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">h1</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">h3</span>&gt;</span><span class="variable">{{ post.pub_date }}</span><span class="tag">&lt;/<span class="title">h3</span>&gt;</span>
+            <span class="variable">{{ post.text<span class="filter">|custom</span>_markdown }}</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+            <span class="template_tag">{% <span class="keyword">if</span> post.category %}</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"col-md-12"</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ post.category.get_absolute_url }}</span>"</span>&gt;</span><span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"label label-primary"</span>&gt;</span><span class="variable">{{ post.category.name }}</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+            <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+            <span class="template_tag">{% <span class="keyword">if</span> post.tags %}</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"col-md-12"</span>&gt;</span>
+            <span class="template_tag">{% <span class="keyword">for</span> tag <span class="keyword">in</span> post.tags.all %}</span>
+            <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ tag.get_absolute_url }}</span>"</span>&gt;</span><span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"label label-success"</span>&gt;</span><span class="variable">{{ tag.name }}</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+            <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+            <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+            <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+        <span class="template_tag">{% <span class="keyword">else</span> %}</span>
+            <span class="tag">&lt;<span class="title">p</span>&gt;</span>No posts found<span class="tag">&lt;/<span class="title">p</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+
+        <span class="tag">&lt;<span class="title">ul</span> <span class="attribute">class</span>=<span class="value">"pager"</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">if</span> page_obj.has_previous %}</span>
+        <span class="tag">&lt;<span class="title">li</span> <span class="attribute">class</span>=<span class="value">"previous"</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/<span class="variable">{{ page_obj.previous_page_number }}</span>/"</span>&gt;</span>Previous Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+        <span class="template_tag">{% <span class="keyword">if</span> page_obj.has_next %}</span>
+        <span class="tag">&lt;<span class="title">li</span> <span class="attribute">class</span>=<span class="value">"next"</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/<span class="variable">{{ page_obj.next_page_number }}</span>/"</span>&gt;</span>Next Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+        <span class="tag">&lt;/<span class="title">ul</span>&gt;</span>
+
+    <span class="template_tag">{% <span class="keyword">endblock</span> %}</span><span class="template_tag">{% endraw %}</span></code></pre>
+<p>We&#39;ll also want to tidy up the layout for our individual post pages:</p>
+<p>``` html templates/blogengine/post_detail.html
+{% raw %}{% extends &quot;blogengine/includes/base.html&quot; %}</p>
+<pre><code><span class="template_tag">{% <span class="keyword">load</span> custom_markdown %}</span>
+
+<span class="template_tag">{% <span class="keyword">block</span> content %}</span>
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"post col-md-12"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">h1</span>&gt;</span><span class="variable">{{ object.title }}</span><span class="tag">&lt;/<span class="title">h1</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">h3</span>&gt;</span><span class="variable">{{ object.pub_date }}</span><span class="tag">&lt;/<span class="title">h3</span>&gt;</span>
+    <span class="variable">{{ object.text<span class="filter">|custom</span>_markdown }}</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="template_tag">{% <span class="keyword">if</span> object.category %}</span>
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"col-md-12"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ object.category.get_absolute_url }}</span>"</span>&gt;</span><span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"label label-primary"</span>&gt;</span><span class="variable">{{ object.category.name }}</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+    <span class="template_tag">{% <span class="keyword">if</span> object.tags %}</span>
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"col-md-12"</span>&gt;</span>
+    <span class="template_tag">{% <span class="keyword">for</span> tag <span class="keyword">in</span> object.tags.all %}</span>
+    <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ tag.get_absolute_url }}</span>"</span>&gt;</span><span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"label label-success"</span>&gt;</span><span class="variable">{{ tag.name }}</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+    <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"col-md-12"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">h4</span>&gt;</span>Comments<span class="tag">&lt;/<span class="title">h4</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"fb-comments"</span> <span class="attribute">data-href</span>=<span class="value">"http://<span class="variable">{{ object.site }}</span><span class="variable">{{ object.get_absolute_url }}</span>"</span> <span class="attribute">data-width</span>=<span class="value">"470"</span> <span class="attribute">data-num-posts</span>=<span class="value">"10"</span>&gt;</span><span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+
+<span class="template_tag">{% <span class="keyword">endblock</span> %}</span><span class="template_tag">{% endraw %}</span></code></pre>
+<pre><code>
+Time to <span class="operator"><span class="keyword">commit</span> our changes:
+
+<span class="string">``</span><span class="string">` bash
+git add templates/blogengine/
+git commit -m 'Tidied up post templates'</code></pre>
+<p>With that done, let&#39;s turn our attention to our base template. We&#39;ll amend the header to collapse down at smaller screen widths. This is easy to do with Bootstrap:</p>
+<p>``` html templates/blogengine/includes/base.html
+{% raw %}&lt;!DOCTYPE html&gt;
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js"> <!--<![endif]-->
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title>{% block title %}My Django Blog{% endblock %}</title>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="alternate" type="application/rss+xml" title="Blog posts" href="/feeds/posts/" ></p>
+<pre><code>    <span class="comment">&lt;!-- Place favicon.ico and apple-touch-icon.png in the root directory --&gt;</span>
+
+    <span class="template_tag">{% <span class="keyword">load</span> staticfiles %}</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/html5-boilerplate/css/normalize.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/html5-boilerplate/css/main.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/bootstrap/dist/css/bootstrap.min.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/bootstrap/dist/css/bootstrap-theme.min.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'css/main.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">href</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'css/code.css' %}</span>"</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span> <span class="attribute">src</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/html5-boilerplate/js/vendor/modernizr-2.6.2.min.js' %}</span>"</span>&gt;</span><span class="javascript"></span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+<span class="tag">&lt;/<span class="title">head</span>&gt;</span>
+<span class="tag">&lt;<span class="title">body</span>&gt;</span>
+    <span class="comment">&lt;!--[if lt IE 7]&gt;
+        &lt;p class="browsehappy"&gt;You are using an &lt;strong&gt;outdated&lt;/strong&gt; browser. Please &lt;a href="http://browsehappy.com/"&gt;upgrade your browser&lt;/a&gt; to improve your experience.&lt;/p&gt;
+    &lt;![endif]--&gt;</span>
+
+    <span class="comment">&lt;!-- Add your site or application content here --&gt;</span>
+
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">id</span>=<span class="value">"fb-root"</span>&gt;</span><span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span>&gt;</span><span class="javascript">(<span class="keyword">function</span>(d, s, id) {
+        <span class="keyword">var</span> js, fjs = d.getElementsByTagName(s)[<span class="number">0</span>];
+        <span class="keyword">if</span> (d.getElementById(id)) <span class="keyword">return</span>;
+            js = d.createElement(s); js.id = id;
+            js.src = <span class="string">"//connect.facebook.net/en_GB/all.js#xfbml=1"</span>;
+            fjs.parentNode.insertBefore(js, fjs);
+        }(document, <span class="string">'script'</span>, <span class="string">'facebook-jssdk'</span>));</span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"navbar navbar-static-top navbar-inverse"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"container-fluid"</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"navbar-header"</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">button</span> <span class="attribute">type</span>=<span class="value">"button"</span> <span class="attribute">class</span>=<span class="value">"navbar-toggle"</span> <span class="attribute">data-toggle</span>=<span class="value">"collapse"</span> <span class="attribute">data-target</span>=<span class="value">"#header-nav"</span>&gt;</span>
+                    <span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"icon-bar"</span>&gt;</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span>
+                    <span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"icon-bar"</span>&gt;</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span>
+                    <span class="tag">&lt;<span class="title">span</span> <span class="attribute">class</span>=<span class="value">"icon-bar"</span>&gt;</span><span class="tag">&lt;/<span class="title">span</span>&gt;</span>
+                <span class="tag">&lt;/<span class="title">button</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">a</span> <span class="attribute">class</span>=<span class="value">"navbar-brand"</span> <span class="attribute">href</span>=<span class="value">"/"</span>&gt;</span>My Django Blog<span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"collapse navbar-collapse"</span> <span class="attribute">id</span>=<span class="value">"header-nav"</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">ul</span> <span class="attribute">class</span>=<span class="value">"nav navbar-nav"</span>&gt;</span>
+                    <span class="template_tag">{% <span class="keyword">load</span> flatpages %}</span>
+                    <span class="template_tag">{% get_flatpages <span class="keyword">as</span> flatpages %}</span>
+                    <span class="template_tag">{% <span class="keyword">for</span> flatpage <span class="keyword">in</span> flatpages %}</span>
+                    <span class="tag">&lt;<span class="title">li</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ flatpage.url }}</span>"</span>&gt;</span><span class="variable">{{ flatpage.title }}</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+                    <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+                    <span class="tag">&lt;<span class="title">li</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/feeds/posts/"</span>&gt;</span>RSS feed<span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+                <span class="tag">&lt;/<span class="title">ul</span>&gt;</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"container"</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">block</span> header %}</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"page-header"</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">h1</span>&gt;</span>My Django Blog<span class="tag">&lt;/<span class="title">h1</span>&gt;</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endblock</span> %}</span>
+
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"row"</span>&gt;</span>
+            <span class="template_tag">{% <span class="keyword">block</span> content %}</span><span class="template_tag">{% <span class="keyword">endblock</span> %}</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+
+    <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"container footer"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"row"</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"span12"</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">p</span>&gt;</span>Copyright &amp;copy; <span class="template_tag">{% <span class="keyword">now</span> "Y" %}</span><span class="tag">&lt;/<span class="title">p</span>&gt;</span>
+            <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+    <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+
+    <span class="tag">&lt;<span class="title">script</span> <span class="attribute">src</span>=<span class="value">"//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"</span>&gt;</span><span class="javascript"></span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span>&gt;</span><span class="javascript">window.jQuery || document.write(<span class="string">'&lt;script src="{% static '</span>bower_components/html5-boilerplate/js/vendor/jquery-<span class="number">1.10</span><span class="number">.2</span>.min.js<span class="string">' %}"&gt;&lt;\/script&gt;'</span>)</span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span> <span class="attribute">src</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/html5-boilerplate/js/plugins.js' %}</span>"</span>&gt;</span><span class="javascript"></span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span> <span class="attribute">src</span>=<span class="value">"<span class="template_tag">{% <span class="keyword">static</span> 'bower_components/bootstrap/dist/js/bootstrap.min.js' %}</span>"</span>&gt;</span><span class="javascript"></span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+
+    <span class="comment">&lt;!-- Google Analytics: change UA-XXXXX-X to be your site's ID. --&gt;</span>
+    <span class="tag">&lt;<span class="title">script</span>&gt;</span><span class="javascript">
+        (<span class="keyword">function</span>(b,o,i,l,e,r){b.GoogleAnalyticsObject=l;b[l]||(b[l]=
+        <span class="keyword">function</span>(){(b[l].q=b[l].q||[]).push(arguments)});b[l].l=+<span class="keyword">new</span> Date;
+        e=o.createElement(i);r=o.getElementsByTagName(i)[<span class="number">0</span>];
+        e.src=<span class="string">'//www.google-analytics.com/analytics.js'</span>;
+        r.parentNode.insertBefore(e,r)}(window,document,<span class="string">'script'</span>,<span class="string">'ga'</span>));
+        ga(<span class="string">'create'</span>,<span class="string">'UA-XXXXX-X'</span>);ga(<span class="string">'send'</span>,<span class="string">'pageview'</span>);
+    </span><span class="tag">&lt;/<span class="title">script</span>&gt;</span>
+<span class="tag">&lt;/<span class="title">body</span>&gt;</span></code></pre>
+<p></html>{% endraw %}</p>
+<pre><code>
+Here we've also added a link <span class="keyword">to</span> our RSS feed <span class="keyword">in</span> <span class="keyword">the</span> header, <span class="keyword">and</span> another <span class="keyword">in</span> <span class="keyword">the</span> page head <span class="keyword">to</span> facilitate working <span class="keyword">with</span> browsers <span class="keyword">that</span> support RSS better.
+
+Our blog's now looking much more presentable. All <span class="keyword">that</span> remains <span class="keyword">is</span> <span class="keyword">to</span> commit <span class="keyword">it</span>:
+
+``` bash
+git add templates/blogengine/includes/base.html
+git commit -m 'Amended base template'</code></pre>
+<p>Now we can push it to GitHub and deploy it on Heroku:</p>
+<pre><code class="lang-bash">git push origin master
+git push heroku master</code></pre>
+<p>And we&#39;re done! Don&#39;t forget, you can grab this lesson with <code>git checkout lesson-6</code>.</p>
+<p>Next time, we&#39;ll cover search (I promise!).</p>
+
+  </section>
+    <section>
+        <p>
+          25th May 2014
+          
+            by Matthew Daly
+          
+        </p>
+    </section>
+
+  <ul class="pager">
+      
+        <li><a href="/posts/2014-08-25-django-blog-tutorial-the-next-generation-part-7.html">Newer</a></li>
+      
+      
+        <li><a href="/posts/2014-05-24-django-blog-tutorial-the-next-generation-part-5.html">Older</a></li>
+      
+    </ul>
+  <section class="comments">
+    
+      <div id="disqus_thread"></div>
+      <script type="text/javascript">
+        window.disqus_identifier="";
+        window.disqus_url="http://www.matthewdaly.co.uk/posts/2014-05-25-django-blog-tutorial-the-next-generation-part-6.html";
+        window.disqus_title="Django Blog Tutorial - the Next Generation - Part 6";
+      </script>
+        <script type="text/javascript" src="http://disqus.com/forums/mattbd/embed.js"></script>
+        <noscript><a href="http://mattbd.disqus.com/?url=ref">View the discussion thread.</a></noscript>
+    
+    
+  </section>
+</article>
+
+        </div>
+
+        <footer>
+            <div class="container">
+                Copyright Matthew Daly, 2014.
+            </div>
+        </footer>
+        <script type="text/javascript" src="/static/js/dependencies.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script>
+    </body>
+</html>

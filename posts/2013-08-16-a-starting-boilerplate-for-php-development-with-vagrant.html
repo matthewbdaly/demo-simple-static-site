@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta property="fb:app_id" content=""/>
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/bootstrap-sass/dist/css/bootstrap.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/flat-ui/dist/css/flat-ui.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/highlightjs/styles/zenburn.css" media="all" />
+        <link rel="alternate" type="application/rss+xml" title="A Series of Quite Extraordinary Events - feed" href="/index.xml" />
+        <title>A Series of Quite Extraordinary Events - A starting boilerplate for PHP development with Vagrant</title>
+    </head>
+    <body>
+        <header>
+            <div class="container">
+                <div class="page-header">
+                    <h1>A Series of Quite Extraordinary Events</h1>
+                    <h2>Being the blog of Matthew Daly Esquire</h2>
+                    <nav>
+                        <a href="/">Home</a> | <a href="/archive.html">Archives</a> | <a href="/about.html">About</a> | <a href="/rss.xml">RSS</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <article class="post">
+    
+  <div class="title">
+    <h1><a href="/posts/2013-08-16-a-starting-boilerplate-for-php-development-with-vagrant.html">A starting boilerplate for PHP development with Vagrant</a></h1>
+  </div>
+  <section>
+    <p>I&#39;ve recently started using <a href="http://www.vagrantup.com/">Vagrant</a> for PHP development. It&#39;s an incredibly useful and convenient tool - never again will I have to faff about installing XAMPP on someone&#39;s laptop so they can demonstrate the new site, instead I can just install Vagrant and Virtualbox, clone the repository, and run <code>vagrant up</code>, and nip off and make a cuppa, safe in the knowledge that when I get back the install will be, if not done, then at least in progress. Also, it means it&#39;s easy to run the same OS for development and production.</p>
+<p>I&#39;ve used <a href="https://puphpet.com/">PuPHPet</a> a bit, but I&#39;ve found Puppet to be a little complex for what I wanted, so I switched to using the shell provisioner instead. As a starting point for future projects, I&#39;ve thrown together a basic Vagrant configuration based on that provided by PuPHPet, that includes the following:</p>
+<ul>
+<li>A full LAMP stack, running on Ubuntu 12.04</li>
+<li>APC</li>
+<li>PHPMyAdmin</li>
+<li>Git</li>
+<li>A blank SQL file - this is automatically run on <code>vagrant up</code>, so you can place any commands needed to set up your database in here.</li>
+<li>msmtp - just amend the username and password in bootstrap.sh to point to a Gmail account and your web app should be able to send emails via that account quickly and easily</li>
+</ul>
+<p>It&#39;s available <a href="https://github.com/matthewbdaly/vagrant-php-dev-boilerplate">here</a>, and if you haven&#39;t discovered the benefits of Vagrant yet, it would be a good place to start.</p>
+
+  </section>
+    <section>
+        <p>
+          16th August 2013
+          
+            by Matthew Daly
+          
+        </p>
+    </section>
+
+  <ul class="pager">
+      
+        <li><a href="/posts/2013-12-28-django-blog-tutorial-the-next-generation-part-1.html">Newer</a></li>
+      
+      
+        <li><a href="/posts/2013-07-28-first-steps-with-node-dot-js.html">Older</a></li>
+      
+    </ul>
+  <section class="comments">
+    
+      <div id="disqus_thread"></div>
+      <script type="text/javascript">
+        window.disqus_identifier="";
+        window.disqus_url="http://www.matthewdaly.co.uk/posts/2013-08-16-a-starting-boilerplate-for-php-development-with-vagrant.html";
+        window.disqus_title="A starting boilerplate for PHP development with Vagrant";
+      </script>
+        <script type="text/javascript" src="http://disqus.com/forums/mattbd/embed.js"></script>
+        <noscript><a href="http://mattbd.disqus.com/?url=ref">View the discussion thread.</a></noscript>
+    
+    
+  </section>
+</article>
+
+        </div>
+
+        <footer>
+            <div class="container">
+                Copyright Matthew Daly, 2014.
+            </div>
+        </footer>
+        <script type="text/javascript" src="/static/js/dependencies.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script>
+    </body>
+</html>

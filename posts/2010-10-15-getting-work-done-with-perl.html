@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta property="fb:app_id" content=""/>
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/bootstrap-sass/dist/css/bootstrap.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/flat-ui/dist/css/flat-ui.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/highlightjs/styles/zenburn.css" media="all" />
+        <link rel="alternate" type="application/rss+xml" title="A Series of Quite Extraordinary Events - feed" href="/index.xml" />
+        <title>A Series of Quite Extraordinary Events - Getting work done with Perl</title>
+    </head>
+    <body>
+        <header>
+            <div class="container">
+                <div class="page-header">
+                    <h1>A Series of Quite Extraordinary Events</h1>
+                    <h2>Being the blog of Matthew Daly Esquire</h2>
+                    <nav>
+                        <a href="/">Home</a> | <a href="/archive.html">Archives</a> | <a href="/about.html">About</a> | <a href="/rss.xml">RSS</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <article class="post">
+    
+  <div class="title">
+    <h1><a href="/posts/2010-10-15-getting-work-done-with-perl.html">Getting work done with Perl</a></h1>
+  </div>
+  <section>
+    <p>After my initial struggles with Perl, I now think I&#39;m really starting to get to grips with the language. I generally find it a pain when you have to learn by building small but basically useless scripts - I always do best when building something useful.</p>
+<p>As one of the exercises for my studies I had to open a database connection to a Microsoft Access database, but I wanted to do the exercise in Ubuntu (I&#39;ve always preferred using Unix-like operating systems for programming, and thanks to apt-get it&#39;s a lot less grief installing additional libraries and modules as you need them) and couldn&#39;t get Perl to connect to the database properly, so I resolved to export it to either MySQL or SQLite.</p>
+<p>I was able to export it to MySQL in the end using mdbtools, but I wasn&#39;t entirely happy with the end result. I resorted to re-exporting the data as a CSV file, then resolved to write a small Perl script to read the file, parse it using a regular expression to obtain the necessary information, then insert it into a new SQLite database.</p>
+<p>Here&#39;s what I came up with:</p>
+<pre><code class="lang-perl"><span class="comment">#!/usr/bin/perl -w</span>
+
+<span class="keyword">use</span> strict;
+<span class="keyword">use</span> DBI;
+
+<span class="keyword">my</span> <span class="variable">$db</span> = <span class="string">"dbi:SQLite:backend.db"</span>;
+
+<span class="keyword">if</span> (!(-e <span class="string">"backend.db"</span>))
+{
+   <span class="keyword">print</span> <span class="string">"Database does not exist. Creating it..."</span>;
+
+   <span class="comment"># Create the database</span>
+   <span class="keyword">my</span> <span class="variable">$dbh</span> = DBI-&gt;connect(<span class="variable">$db</span>) <span class="keyword">or</span> <span class="keyword">die</span> <span class="string">"Error in connecting to database! <span class="variable">$DBI::errstr</span>"</span>;
+   <span class="keyword">my</span> <span class="variable">$createdb</span> = <span class="variable">$dbh</span>-&gt;do(<span class="string">"CREATE TABLE CARS( ID INTEGER PRIMARY KEY, YEAR INTEGER, MAKE VARCHAR(30), MODEL VARCHAR(30), COLOR VARCHAR(30), PRICE INTEGER);"</span>);
+   <span class="variable">$dbh</span>-&gt;disconnect();
+}
+
+<span class="keyword">open</span>(READFILE, <span class="string">"cartable.csv"</span>);
+
+<span class="keyword">while</span>()
+{
+   <span class="keyword">unless</span>(<span class="variable">$_</span> =~ <span class="regexp">m/id,/</span>)
+   {
+      <span class="regexp">m/\d+\,(\d{4})\,\"(\w+)\"\,\"(\w+)\"\,\"(\w+)\"\,\"(\d+)\"/</span>;
+      <span class="keyword">my</span> <span class="variable">$year</span> = <span class="variable">$1</span>;
+      <span class="keyword">my</span> <span class="variable">$make</span> = <span class="variable">$2</span>;
+      <span class="keyword">my</span> <span class="variable">$model</span> = <span class="variable">$3</span>;
+      <span class="keyword">my</span> <span class="variable">$color</span> = <span class="variable">$4</span>;
+      <span class="keyword">my</span> <span class="variable">$price</span> = <span class="variable">$5</span>;
+
+      <span class="keyword">my</span> <span class="variable">$dbh2</span> = DBI-&gt;connect(<span class="variable">$db</span>) <span class="keyword">or</span> <span class="keyword">die</span> <span class="string">"Error in connecting to database! <span class="variable">$DBI::errstr</span>"</span>;
+      <span class="keyword">my</span> <span class="variable">$insertdb</span> = <span class="variable">$dbh2</span>-&gt;do(<span class="string">"INSERT INTO CARS (YEAR, MAKE, MODEL, COLOR, PRICE) VALUES (\"<span class="variable">$year</span>\", \"<span class="variable">$make</span>\", \"<span class="variable">$model</span>\", \"<span class="variable">$color</span>\", \"<span class="variable">$price</span>\");"</span>);
+      <span class="variable">$dbh2</span>-&gt;disconnect;
+   }
+}
+<span class="keyword">close</span>(READFILE);
+
+<span class="keyword">print</span> <span class="string">"Write completed!\n"</span>;
+<span class="keyword">print</span> <span class="string">"To demonstrate it works, we'll run a SELECT query against the database...\n"</span>;
+
+<span class="comment"># Read the database</span>
+<span class="keyword">my</span> <span class="variable">$readdb</span> = DBI-&gt;connect(<span class="variable">$db</span>);
+<span class="keyword">my</span> <span class="variable">$dbselect</span> = <span class="variable">$readdb</span>-&gt;prepare(<span class="string">"SELECT * FROM CARS;"</span>);
+<span class="variable">$dbselect</span>-&gt;execute;
+
+<span class="comment"># Print the results</span>
+<span class="keyword">print</span> <span class="string">"ID\tYear\tMake\tModel\tColor\tPrice\n"</span>;
+<span class="keyword">while</span>(<span class="keyword">my</span> <span class="variable">@row</span> = <span class="variable">$dbselect</span>-&gt;fetchrow_array)
+{
+   <span class="keyword">print</span> <span class="string">"<span class="variable">$row</span>[0]\t<span class="variable">$row</span>[1]\t<span class="variable">$row</span>[2]\t<span class="variable">$row</span>[3]\t<span class="variable">$row</span>[4]\t<span class="variable">$row</span>[5]\n"</span>;
+}
+
+<span class="comment"># Close the connection</span>
+<span class="variable">$readdb</span>-&gt;disconnect;</code></pre>
+<p>Apologies for the fact that the indentation doesn&#39;t seem to have copied across from Vim very well (can anyone recommend a good WordPress plugin for displaying code, none of the ones I&#39;ve tried seem to be any good?). It works well, and it&#39;s also helped me grasp Perl&#39;s database API better.</p>
+<p>I think I&#39;ve got a better idea now of what Python and Perl are best at and when to use each. Perl is a great language, but the fact that a lot of it is implicit makes it a little harder to pick up at first than Python - for instance, the default variable, which is quite a good idea, but takes a little getting used to. Its regex support is great, and I like the database API, but I would find it a lot harder to do any object-oriented programming in Perl than in Python (which I guess is why <a href="http://www.iinteractive.com/moose/">Moose</a> exists). I&#39;ve found Perl very useful for quick and dirty scripts and as a glue language, but for longer scripts Python seems the better choice.</p>
+
+  </section>
+    <section>
+        <p>
+          15th October 2010
+          
+            by Matthew Daly
+          
+        </p>
+    </section>
+
+  <ul class="pager">
+      
+        <li><a href="/posts/2010-10-16-another-perl-snippet.html">Newer</a></li>
+      
+      
+        <li><a href="/posts/2010-08-22-what-makes-a-good-programming-textbook.html">Older</a></li>
+      
+    </ul>
+  <section class="comments">
+    
+      <div id="disqus_thread"></div>
+      <script type="text/javascript">
+        window.disqus_identifier="";
+        window.disqus_url="http://www.matthewdaly.co.uk/posts/2010-10-15-getting-work-done-with-perl.html";
+        window.disqus_title="Getting work done with Perl";
+      </script>
+        <script type="text/javascript" src="http://disqus.com/forums/mattbd/embed.js"></script>
+        <noscript><a href="http://mattbd.disqus.com/?url=ref">View the discussion thread.</a></noscript>
+    
+    
+  </section>
+</article>
+
+        </div>
+
+        <footer>
+            <div class="container">
+                Copyright Matthew Daly, 2014.
+            </div>
+        </footer>
+        <script type="text/javascript" src="/static/js/dependencies.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script>
+    </body>
+</html>

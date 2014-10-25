@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta property="fb:app_id" content=""/>
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/bootstrap-sass/dist/css/bootstrap.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/flat-ui/dist/css/flat-ui.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/highlightjs/styles/zenburn.css" media="all" />
+        <link rel="alternate" type="application/rss+xml" title="A Series of Quite Extraordinary Events - feed" href="/index.xml" />
+        <title>A Series of Quite Extraordinary Events - A couple of things I love about Perl</title>
+    </head>
+    <body>
+        <header>
+            <div class="container">
+                <div class="page-header">
+                    <h1>A Series of Quite Extraordinary Events</h1>
+                    <h2>Being the blog of Matthew Daly Esquire</h2>
+                    <nav>
+                        <a href="/">Home</a> | <a href="/archive.html">Archives</a> | <a href="/about.html">About</a> | <a href="/rss.xml">RSS</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <article class="post">
+    
+  <div class="title">
+    <h1><a href="/posts/2010-10-27-a-couple-of-things-i-love-about-perl.html">A couple of things I love about Perl</a></h1>
+  </div>
+  <section>
+    <p>In the time that I&#39;ve been learning Perl, I&#39;ve slowly grown to appreciate the strengths of the language more and more. There&#39;s two things in particular that I like about Perl. Once that I really don&#39;t think anyone is going to be surprised by is CPAN. It&#39;s a fantastic resource - there are a huge quantity of Perl modules available for virtually any task under the sun, and they&#39;re incredibly useful.</p>
+<p>The other is just how good the documentation is - I&#39;ve never considered myself to be someone who learns terribly well from Unix man pages, but perldoc seems to have very good documentation indeed, including that for CPAN modules. Also, it helps that if you don&#39;t do well with the man page format, you have the option of running podwebserver and getting the documentation formatted as web pages.</p>
+<p>To give an example, I&#39;m particularly interested in all kinds of network programming, be it web development, IRC, Jabber or whatever, and I&#39;d heard of the Net::IRC module so I decided to start using it to create a simple IRC bot (yes, I know I should really be using POE::Component::IRC instead!). Using the information gleaned from perldoc Net::IRC it was easy to get started writing a bot, and I&#39;ve now come up with the following simple bot:</p>
+<pre><code class="lang-perl"><span class="comment">#!/usr/bin/perl -w</span>
+
+<span class="keyword">use</span> strict;
+<span class="keyword">use</span> Net::IRC;
+
+<span class="keyword">my</span> <span class="variable">$irc</span> = new Net::IRC;
+<span class="keyword">my</span> <span class="variable">$nick</span> = <span class="string">"mattsbot"</span>;
+<span class="keyword">my</span> <span class="variable">$server</span> = <span class="string">"irc.freenode.net"</span>;
+<span class="keyword">my</span> <span class="variable">$channel</span> = <span class="string">"#botpark"</span>;
+<span class="keyword">my</span> <span class="variable">$port</span> = <span class="number">6667</span>;
+<span class="keyword">my</span> <span class="variable">$ircname</span> = <span class="string">"My wonderful bot"</span>;
+<span class="keyword">my</span> <span class="variable">$owner</span> = <span class="string">"mattbd"</span>; 
+
+<span class="sub"><span class="keyword">sub</span> on_connect
+{</span>
+   <span class="keyword">my</span> <span class="variable">$self</span> = <span class="keyword">shift</span>;
+
+   <span class="keyword">print</span> <span class="string">"Joining <span class="variable">$channel</span>\n"</span>;
+   <span class="variable">$self</span>-&gt;join(<span class="variable">$channel</span>);
+   <span class="variable">$self</span>-&gt;privmsg(<span class="variable">$channel</span>,<span class="string">"Ready to go!"</span>);
+}
+
+<span class="sub"><span class="keyword">sub</span> on_disconnect
+{</span>
+    <span class="keyword">my</span> <span class="variable">$self</span> = <span class="keyword">shift</span>;
+    <span class="variable">$self</span>-&gt;join(<span class="variable">$channel</span>);
+    <span class="variable">$self</span>-&gt;privmsg(<span class="variable">$channel</span>, <span class="string">"Sorry about that - dropped out for a sec."</span>);
+} 
+
+<span class="sub"><span class="keyword">sub</span> on_join
+{</span>
+    <span class="comment"># Get the connection and event objects</span>
+    <span class="keyword">my</span> (<span class="variable">$conn</span>, <span class="variable">$event</span>) = <span class="variable">@_</span>;
+
+    <span class="comment"># Get the nick that just joined</span>
+    <span class="keyword">my</span> <span class="variable">$newnick</span> = <span class="variable">$event</span>-&gt;{nick};
+
+    <span class="comment"># Greet the new nick</span>
+    <span class="variable">$conn</span>-&gt;privmsg(<span class="variable">$channel</span>, <span class="string">"Hello, <span class="variable">$newnick</span>! I'm a greeting bot!"</span>);
+}
+
+<span class="sub"><span class="keyword">sub</span> on_msg
+{</span>
+    <span class="comment"># Get the connection and event objects</span>
+    <span class="keyword">my</span> (<span class="variable">$conn</span>, <span class="variable">$event</span>) = <span class="variable">@_</span>;
+
+    <span class="comment"># Get nick of messaging user</span>
+    <span class="keyword">my</span> <span class="variable">$messager</span> = <span class="variable">$event</span>-&gt;{nick};
+
+    <span class="comment"># Respond negatively</span>
+    <span class="variable">$conn</span>-&gt;privmsg(<span class="variable">$messager</span>, <span class="string">"Sorry, I'm just a bot. Please don't message me!"</span>);
+}
+
+<span class="sub"><span class="keyword">sub</span> on_public
+{</span>
+    <span class="comment"># Get the connection and event objects</span>
+    <span class="keyword">my</span> (<span class="variable">$conn</span>, <span class="variable">$event</span>) = <span class="variable">@_</span>;
+
+    <span class="comment"># Get nick of messaging user</span>
+    <span class="keyword">my</span> <span class="variable">$messager</span> = <span class="variable">$event</span>-&gt;{nick};
+
+    <span class="comment"># Get text of message</span>
+    <span class="keyword">my</span> <span class="variable">$text</span> = <span class="variable">$event</span>-&gt;{args}[<span class="number">0</span>];
+
+    <span class="comment"># Check to see if text contains name of bot - if so message the user negatively</span>
+    <span class="keyword">if</span>(<span class="variable">$text</span> =~ <span class="regexp">m/$nick/</span>)
+    {
+        <span class="variable">$conn</span>-&gt;privmsg(<span class="variable">$channel</span>, <span class="string">"Sorry, <span class="variable">$messager</span>,I'm just a simple bot!"</span>);
+    }
+}
+
+<span class="keyword">my</span> <span class="variable">$conn</span> = <span class="variable">$irc</span>-&gt;newconn(<span class="string">Nick =&gt;</span><span class="variable">$nick</span>,<span class="string">Server=&gt;</span><span class="variable">$server</span>,<span class="string">Port=&gt;</span><span class="variable">$port</span>,<span class="string">Ircname=&gt;</span><span class="variable">$ircname</span>);
+<span class="variable">$conn</span>-&gt;add_global_handler(<span class="string">'376'</span>, \&amp;on;_<span class="keyword">connect</span>);
+<span class="variable">$conn</span>-&gt;add_global_handler(<span class="string">'disconnect'</span>, \&amp;on;_disconnect);
+<span class="variable">$conn</span>-&gt;add_global_handler(<span class="string">'msg'</span>, \&amp;on;_msg);
+<span class="variable">$conn</span>-&gt;add_global_handler(<span class="string">'join'</span>, \&amp;on;_<span class="keyword">join</span>);
+<span class="variable">$conn</span>-&gt;add_global_handler(<span class="string">'msg'</span>, \&amp;on;_msg);
+<span class="variable">$conn</span>-&gt;add_global_handler(<span class="string">'public'</span>, \&amp;on;_public);
+<span class="variable">$irc</span>-&gt;start();</code></pre>
+<p>Now, this bot isn&#39;t exactly hugely capable - all it does is greet new joiners, and tell you to leave it alone if you try to talk to it, but it was pretty easy to code it, thanks to the documentation, and it&#39;s a good base to build on. From here, it&#39;s easy to extend the on_public and on_msg subroutines to deal with other messages - for instance, I could use a regular expression to look for &quot;!respond&quot; in the text of the message and if it&#39;s found, respond with any appropriate text.</p>
+<p>I&#39;ve hard-coded the appropriate details into the script in this case to make it quicker and easier to test it, but it would be trivial to change it to either accept settings passed as arguments from the command line, or have it grab these from a separate text file.</p>
+<p>My initial doubts about Perl are really wearing off. It&#39;s a powerful language and one that, now I&#39;ve picked up the basic syntax, I&#39;m having little trouble getting work done with. </p>
+
+  </section>
+    <section>
+        <p>
+          27th October 2010
+          
+            by Matthew Daly
+          
+        </p>
+    </section>
+
+  <ul class="pager">
+      
+        <li><a href="/posts/2010-10-29-deleting-unwanted-vim-swap-files-using-perl.html">Newer</a></li>
+      
+      
+        <li><a href="/posts/2010-10-19-i-passed.html">Older</a></li>
+      
+    </ul>
+  <section class="comments">
+    
+      <div id="disqus_thread"></div>
+      <script type="text/javascript">
+        window.disqus_identifier="";
+        window.disqus_url="http://www.matthewdaly.co.uk/posts/2010-10-27-a-couple-of-things-i-love-about-perl.html";
+        window.disqus_title="A couple of things I love about Perl";
+      </script>
+        <script type="text/javascript" src="http://disqus.com/forums/mattbd/embed.js"></script>
+        <noscript><a href="http://mattbd.disqus.com/?url=ref">View the discussion thread.</a></noscript>
+    
+    
+  </section>
+</article>
+
+        </div>
+
+        <footer>
+            <div class="container">
+                Copyright Matthew Daly, 2014.
+            </div>
+        </footer>
+        <script type="text/javascript" src="/static/js/dependencies.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script>
+    </body>
+</html>

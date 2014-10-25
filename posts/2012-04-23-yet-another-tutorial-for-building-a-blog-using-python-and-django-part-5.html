@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta property="fb:app_id" content=""/>
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/bootstrap-sass/dist/css/bootstrap.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/flat-ui/dist/css/flat-ui.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/highlightjs/styles/zenburn.css" media="all" />
+        <link rel="alternate" type="application/rss+xml" title="A Series of Quite Extraordinary Events - feed" href="/index.xml" />
+        <title>A Series of Quite Extraordinary Events - Yet another tutorial for building a blog using Python and Django - part 5</title>
+    </head>
+    <body>
+        <header>
+            <div class="container">
+                <div class="page-header">
+                    <h1>A Series of Quite Extraordinary Events</h1>
+                    <h2>Being the blog of Matthew Daly Esquire</h2>
+                    <nav>
+                        <a href="/">Home</a> | <a href="/archive.html">Archives</a> | <a href="/about.html">About</a> | <a href="/rss.xml">RSS</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <article class="post">
+    
+  <div class="title">
+    <h1><a href="/posts/2012-04-23-yet-another-tutorial-for-building-a-blog-using-python-and-django-part-5.html">Yet another tutorial for building a blog using Python and Django - part 5</a></h1>
+  </div>
+  <section>
+    <p>In this instalment I&#39;ll be showing you how we can make our blogging engine a little nicer to look at by adding some CSS and images, as well as expanding on Django&#39;s templating system.</p>
+<p>First of all, let&#39;s add some CSS to our blog. When developing a web app with Django, you should place static files such as stylesheets and images in a folder inside your app (not project) folder called static. My project is called DjangoBlog, and my app is called blogengine, so all my static content should go in DjangoBlog/blogengine/static/. Here&#39;s the stylesheet, which I&#39;ve saved as style.css:</p>
+<p>``` css blogengine/static/style.css
+body {
+    background-color: #f0f0f0;
+    font-family: Arial, Helvetica, sans-serif;
+}</p>
+<h1 id="main-">main {</h1>
+<pre><code><span class="attribute">width</span>: <span class="string">800px;</span>
+<span class="attribute">height</span>: <span class="string">100%;</span>
+<span class="attribute">margin</span>: <span class="string">50px auto;</span></code></pre>
+<p>}</p>
+<p>ul#pageList {
+    margin: 0px;
+    padding: 10px 0px 10px 0px;
+}</p>
+<p>ul#pageList li {
+    display: inline;
+    margin-right: 10px;
+    font-size: 18px;
+}</p>
+<p>.post, .page {
+    width: 600px;
+    padding: 20px;
+    margin-bottom: 20px;
+    background-color: #ffffff;
+}</p>
+<pre><code>
+In the same folder, I have a PNG icon for an RSS feed, and if you had some JavaScript files you wanted to use (such as a copy of jQuery), you would put them here too. Note that there's nothing to stop you creating subfolders within /static, and in fact I would recommend you do so for any future project so you can separate out images, CSS and JavaScript easily.
+
+With that done, we now need to change our templates to make use of this CSS. Here's what header.html should look like:
+
+``` html templates/header.html
+<span class="tag">&lt;<span class="title">html</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">head</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">title</span>&gt;</span>My Django Blog<span class="tag">&lt;/<span class="title">title</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">link</span> <span class="attribute">rel</span>=<span class="value">"stylesheet"</span> <span class="attribute">type</span>=<span class="value">"text/css"</span> <span class="attribute">href</span>=<span class="value">"/static/style.css"</span> /&gt;</span>
+    <span class="tag">&lt;/<span class="title">head</span>&gt;</span>
+    <span class="tag">&lt;<span class="title">body</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">id</span>=<span class="value">"main"</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">h1</span>&gt;</span>My Django Blog<span class="tag">&lt;/<span class="title">h1</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/feeds/posts/"</span>&gt;</span><span class="tag">&lt;<span class="title">img</span> <span class="attribute">src</span>=<span class="value">"/static/rss.png"</span> <span class="attribute">width</span>=<span class="value">"50px"</span> <span class="attribute">height</span>=<span class="value">"50px"</span>&gt;</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+            <span class="tag">&lt;<span class="title">ul</span> <span class="attribute">id</span>=<span class="value">"pageList"</span>&gt;</span>
+                <span class="tag">&lt;<span class="title">li</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/"</span>&gt;</span>Home<span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span><span class="template_tag">{% raw %}</span>
+                <span class="template_tag">{% <span class="keyword">load</span> flatpages %}</span>
+                <span class="template_tag">{% get_flatpages <span class="keyword">as</span> flatpages %}</span>
+                <span class="template_tag">{% <span class="keyword">for</span> flatpage <span class="keyword">in</span> flatpages %}</span>
+                <span class="tag">&lt;<span class="title">li</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ flatpage.url }}</span>"</span>&gt;</span><span class="variable">{{ flatpage.title }}</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+                <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+            <span class="tag">&lt;/<span class="title">ul</span>&gt;</span><span class="template_tag">{% endraw %}</span></code></pre>
+<p>Next, here&#39;s footer.html:</p>
+<p>``` html templates/footer.html
+        </div>
+    </body>
+</html></p>
+<pre><code>
+Now here's category.html:
+
+``` html templates/category.html
+<span class="template_tag">{% raw %}</span><span class="template_tag">{% <span class="keyword">include</span> 'header.html' %}</span>
+        <span class="template_tag">{% <span class="keyword">load</span> comments %}</span>
+        <span class="tag">&lt;<span class="title">h1</span>&gt;</span>Posts for <span class="variable">{{ category.title }}</span><span class="tag">&lt;/<span class="title">h1</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">if</span> posts %}</span>
+        <span class="template_tag">{% <span class="keyword">for</span> post <span class="keyword">in</span> posts %}</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"post"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">h1</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ post.get_absolute_url }}</span>"</span>&gt;</span><span class="variable">{{ post.title }}</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">h1</span>&gt;</span>
+        <span class="variable">{{ post.text }}</span>
+        <span class="template_tag">{% get_comment_count <span class="keyword">for</span> post <span class="keyword">as</span> comment_count %}</span>
+        <span class="tag">&lt;<span class="title">h3</span>&gt;</span>Comments: <span class="variable">{{ comment_count }}</span><span class="tag">&lt;/<span class="title">h3</span>&gt;</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+        <span class="tag">&lt;<span class="title">br</span> /&gt;</span>
+        <span class="template_tag">{% <span class="keyword">if</span> page.has_previous %}</span>
+        <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/<span class="variable">{{ page.previous_page_number }}</span>/"</span>&gt;</span>Previous Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+        <span class="template_tag">{% <span class="keyword">if</span> page.has_next %}</span>
+        <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/<span class="variable">{{ page.next_page_number }}</span>/"</span>&gt;</span>Next Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+        <span class="template_tag">{% <span class="keyword">else</span> %}</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"post"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">p</span>&gt;</span>No posts matched<span class="tag">&lt;/<span class="title">p</span>&gt;</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+<span class="template_tag">{% <span class="keyword">include</span> 'footer.html' %}</span><span class="template_tag">{% endraw %}</span></code></pre>
+<p>Then, posts.html:</p>
+<p>``` html templates/posts.html
+{% raw %}{% include &#39;header.html&#39; %}
+        {% load comments %}
+        {% if posts %}
+        {% for post in posts %}
+        <div class="post">
+        <h1><a href="{{ post.get_absolute_url }}">{{ post.title }}</a></h1>
+        {{ post.text }}
+        {% get_comment_count for post as comment_count %}
+        <h3>Comments: {{ comment_count }}</h3>
+        </div>
+        {% endfor %}
+        <br />
+        {% if page.has_previous %}
+        <a href="/{{ page.previous_page_number }}/">Previous Page</a>
+        {% endif %}
+        {% if page.has_next %}
+        <a href="/{{ page.next_page_number }}/">Next Page</a>
+        {% endif %}
+        {% else %}
+        <div class="post">
+        <p>No posts matched</p>
+        </div>
+        {% endif %}
+{% include &#39;footer.html&#39; %}{% endraw %}</p>
+<pre><code>
+Here's single.html:
+
+``` html templates/single.html
+<span class="template_tag">{% raw %}</span><span class="template_tag">{% <span class="keyword">include</span> 'header.html' %}</span>
+        <span class="template_tag">{% <span class="keyword">load</span> comments %}</span>
+        <span class="template_tag">{% <span class="keyword">for</span> post <span class="keyword">in</span> posts %}</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"post"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">h1</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ post.get_absolute_url }}</span>"</span>&gt;</span><span class="variable">{{ post.title }}</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">h1</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">h3</span>&gt;</span><span class="variable">{{ post.pub_date }}</span><span class="tag">&lt;/<span class="title">h3</span>&gt;</span>
+        <span class="variable">{{ post.text }}</span>
+        <span class="tag">&lt;<span class="title">h3</span>&gt;</span>By <span class="variable">{{ post.author.first_name }}</span> <span class="variable">{{ post.author.last_name }}</span><span class="tag">&lt;/<span class="title">h3</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">h3</span>&gt;</span>Categories: <span class="template_tag">{% <span class="keyword">for</span> category <span class="keyword">in</span> post.categories.all %}</span> <span class="variable">{{ category.title }}</span> <span class="template_tag">{% <span class="keyword">endfor</span> %}</span><span class="tag">&lt;/<span class="title">h3</span>&gt;</span>
+        <span class="template_tag">{% get_comment_count <span class="keyword">for</span> post <span class="keyword">as</span> comment_count %}</span>
+        <span class="tag">&lt;<span class="title">h3</span>&gt;</span>Comments: <span class="variable">{{ comment_count }}</span><span class="tag">&lt;/<span class="title">h3</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">ol</span>&gt;</span>
+        <span class="template_tag">{% get_comment_list <span class="keyword">for</span> post <span class="keyword">as</span> comments %}</span>
+        <span class="template_tag">{% <span class="keyword">for</span> <span class="keyword">comment</span> <span class="keyword">in</span> comments %}</span>
+        <span class="tag">&lt;<span class="title">li</span>&gt;</span><span class="variable">{{ comment }}</span><span class="tag">&lt;/<span class="title">li</span>&gt;</span>
+        <span class="tag">&lt;/<span class="title">ol</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+        <span class="template_tag">{% render_comment_form <span class="keyword">for</span> post %}</span>
+        <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">br</span> /&gt;</span>
+        <span class="template_tag">{% <span class="keyword">if</span> page.has_previous %}</span>
+        <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/<span class="variable">{{ page.previous_page_number }}</span>/"</span>&gt;</span>Previous Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+        <span class="template_tag">{% <span class="keyword">if</span> page.has_next %}</span>
+        <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/<span class="variable">{{ page.next_page_number }}</span>/"</span>&gt;</span>Next Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+<span class="template_tag">{% <span class="keyword">include</span> 'footer.html' %}</span><span class="template_tag">{% endraw %}</span></code></pre>
+<p>And finally, flatpages/default.html:
+``` html templates/flatpages/default.html
+{% raw %}{% include &#39;header.html&#39; %}
+        <div class="page">
+        <h1>{{ flatpage.title }}</h1>
+        {{ flatpage.content }}
+        </div>
+{% include &#39;footer.html&#39; %}{% endraw %}</p>
+<pre><code>
+Phew! There's quite a lot there, so you may wish <span class="keyword">to</span> grab these files <span class="keyword">from</span> <span class="keyword">the</span> GitHub repository rather than enter them yourself.
+
+Now, all <span class="keyword">of</span> <span class="keyword">the</span> references <span class="keyword">to</span> <span class="keyword">the</span> CSS <span class="keyword">or</span> image <span class="type">file</span> need <span class="keyword">to</span> refer <span class="keyword">to</span> <span class="keyword">the</span> /static folder under <span class="keyword">the</span> root <span class="keyword">of</span> <span class="keyword">the</span> web server. Here's <span class="keyword">the</span> <span class="keyword">reference</span> <span class="keyword">to</span> our stylesheet:
+
+``` html
+&lt;link rel=<span class="string">"stylesheet"</span> type=<span class="string">"text/css"</span> href=<span class="string">"/static/style.css"</span> /&gt;</code></pre>
+<p>And here&#39;s where we get the image:</p>
+<pre><code class="lang-html"><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/feeds/posts/"</span>&gt;</span><span class="tag">&lt;<span class="title">img</span> <span class="attribute">src</span>=<span class="value">"/static/rss.png"</span> <span class="attribute">width</span>=<span class="value">"50px"</span> <span class="attribute">height</span>=<span class="value">"50px"</span>&gt;</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span></code></pre>
+<p>All of our static files can be referenced via the /static folder by default, without needing to set up a rule to cover them in urls.py.</p>
+<p>One other point worth noting is that we&#39;ve added some code to the header to display links to all of the flat pages. This particular snippet of code in header.html is noteworthy:</p>
+<p>``` html header.html
+{% raw %}{% load flatpages %}
+                {% get_flatpages as flatpages %}
+                {% for flatpage in flatpages %}
+                <li><a href="{{ flatpage.url }}">{{ flatpage.title }}</a></li>
+                {% endfor %}{% endraw %}</p>
+<pre><code>
+Here, we <span class="keyword">first</span> <span class="keyword">of</span> all load <span class="keyword">the</span> flat pages. Then we retrieve them, <span class="keyword">and</span> loop <span class="keyword">through</span> each <span class="keyword">of</span> them. For each page, we create a new <span class="type">list</span> <span class="property">item</span> containing a link <span class="keyword">to</span> <span class="keyword">the</span> flat page, <span class="keyword">with</span> <span class="keyword">the</span> <span class="type">text</span> being <span class="keyword">the</span> flat page's title. Note <span class="keyword">that</span> we're just referring <span class="keyword">to</span> each flatpage object's attributes here. Then we <span class="keyword">end</span> <span class="keyword">the</span> <span class="keyword">for</span> loop.
+
+The only problem <span class="keyword">with</span> this <span class="keyword">is</span> <span class="keyword">that</span> all <span class="keyword">of</span> <span class="keyword">the</span> pages except <span class="keyword">the</span> flat pages are handled <span class="keyword">by</span> <span class="keyword">the</span> blogengine <span class="type">application</span>, <span class="keyword">not</span> <span class="keyword">the</span> flatpages one, so we can't <span class="keyword">get</span> <span class="keyword">the</span> values <span class="keyword">for</span> <span class="keyword">the</span> flat pages, so we need <span class="keyword">to</span> amend blogengine/views.py. Open <span class="keyword">it</span> <span class="keyword">and</span> add <span class="keyword">the</span> following line near <span class="keyword">the</span> top:
+
+``` python blogengine/views.py
+<span class="keyword">from</span> django.contrib.flatpages.models import FlatPage</code></pre>
+<p>Now, nowhere else in the view is the FlatPage application needed, but it&#39;s required in the template, so by importing it here we make it available in the template.</p>
+<p>With that done, our Django-powered blog is beginning to look a bit more presentable, so I&#39;ll leave it to you to style it however you wish, using this as a starting point. The blog is now pretty much feature-complete, however there&#39;s one more thing I&#39;d like to demonstrate before we finish up, namely generic views.</p>
+<p>As you may have gathered by now, Django uses slightly different terminology to many other web development frameworks. Although it can be considered an MVC (Model-View-Controller) framework like many others, it&#39;s generally referred to as an MTV (Model-Template-View) framework, with views containing the logic needed to present the data. While Django ships with a number of built-in applications to do certain repetitive tasks easily, not every task lends itself well to being handled by one generic application. However, these tasks may still require something similar be implemented over and over again, and that&#39;s what generic views are for.</p>
+<p>We don&#39;t yet have a list of all of the available categories, so let&#39;s use a generic view to do that. In urls.py, add the following lines at the top:</p>
+<p>``` python DjangoBlog/urls.py
+from django.views.generic import ListView
+from blogengine.models import Category</p>
+<pre><code>
+Then, add the following lines at the top of the section <span class="keyword">for</span> categories:
+
+``` python DjangoBlog/urls.py
+    url(<span class="string">r'^categories/?$'</span>, ListView.as_view(
+        model=Category,
+        )),</code></pre>
+<p>Then, go into your templates folder and create a new folder in there called blogengine (or whatever you&#39;re calling your blog application). In there, create a new file called category_list.html and enter the following code in it:</p>
+<p>``` html templates/blogengine/category_list.html
+{% raw %}{% include &#39;header.html&#39; %}
+        {% for category in object_list %}
+            <h3>{{ category.title }}</h3>
+            <p>{{ category.description }}</p>
+        {% endfor %}
+{% include &#39;footer.html&#39; %}{% endraw %}</p>
+<pre><code>
+Now, ensure <span class="keyword">the</span> development server <span class="keyword">is</span> <span class="property">running</span>, <span class="keyword">and</span> go <span class="keyword">to</span> http://<span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span>:<span class="number">8000</span>/categories/, <span class="keyword">and</span> you should see a <span class="type">list</span> <span class="keyword">of</span> your categories.
+
+Now, you didn't <span class="command">write</span> a view <span class="keyword">for</span> this <span class="keyword">at</span> all. Instead, this <span class="keyword">is</span> handled <span class="keyword">by</span> a generic view. In urls.py, we imported <span class="keyword">the</span> ListView generic view, which <span class="keyword">is</span> nothing more than a <span class="type">list</span> <span class="keyword">of</span> objects. We <span class="keyword">then</span> import <span class="keyword">the</span> Category model. Then, we define a URLconf <span class="keyword">that</span> maps <span class="keyword">the</span> categories/ url <span class="keyword">to</span> ListView, which displays a <span class="type">list</span> <span class="keyword">of</span> all <span class="keyword">the</span> Category objects. The template used <span class="keyword">is</span> determined automatically, <span class="keyword">and</span> we create <span class="keyword">that</span> template <span class="keyword">as</span> normal. Note <span class="keyword">that</span> <span class="keyword">in</span> <span class="keyword">the</span> template we refer <span class="keyword">to</span> object_list - this demonstrates <span class="keyword">that</span> we're referring <span class="keyword">to</span> <span class="keyword">the</span> objects passed <span class="keyword">through</span> generically, <span class="keyword">and</span> <span class="keyword">in</span> theory this same template could display any objects <span class="keyword">with</span> attributes called title <span class="keyword">and</span> description.
+
+Now, <span class="keyword">it</span> probably won't have escaped your notice <span class="keyword">that</span> a blog <span class="keyword">is</span> effectively a <span class="type">list</span> <span class="keyword">of</span> posts, so can't we use a generic view <span class="keyword">to</span> display them? Well, yes we can! So why don't we cut down <span class="function_start"><span class="keyword">on</span> <span class="title">the</span></span> amount <span class="keyword">of</span> code we need <span class="keyword">to</span> maintain <span class="keyword">and</span> use a generic view, rather than writing our own view?
+
+Go <span class="keyword">into</span> blogengine/views.py <span class="keyword">and</span> delete <span class="keyword">the</span> getPosts function <span class="keyword">in</span> <span class="keyword">its</span> entirety. Next, go <span class="keyword">into</span> urls.py <span class="keyword">and</span> delete <span class="keyword">the</span> part <span class="keyword">that</span> deals <span class="keyword">with</span> showing <span class="keyword">the</span> posts (<span class="keyword">the</span> two lines just under <span class="keyword">the</span> Home page comment), <span class="keyword">and</span> replace them <span class="keyword">with</span> this:
+
+``` python DjangoBlog/urls.py
+    url(r'^(?P&lt;page&gt;\d+)?/?$', ListView.as_view(
+        model=Post,
+        paginate_by=<span class="number">5</span>,
+        )),</code></pre>
+<p>Note here that we specify how many items we paginate by. The ListView generic view supports pagination, making it ideally suited for any list of objects that may be spread across multiple pages - you just import the model you want and pass it through in the model parameter.</p>
+<p>We also need to import the Post object in urls.py. Amend the line where you imported the Category model as follows:</p>
+<p>``` python DjangoBlog/urls.py
+from blogengine.models import Category, Post</p>
+<pre><code>
+Then move posts.html into your templates/blogengine folder and rename it post_list.html, then amend it to look like the following:
+
+``` html templates/blogengine/post_list.html
+<span class="template_tag">{% raw %}</span><span class="template_tag">{% <span class="keyword">include</span> 'header.html' %}</span>
+        <span class="template_tag">{% <span class="keyword">load</span> comments %}</span>
+        <span class="template_tag">{% <span class="keyword">if</span> object_list %}</span>
+        <span class="template_tag">{% <span class="keyword">for</span> post <span class="keyword">in</span> object_list %}</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"post"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">h1</span>&gt;</span><span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"<span class="variable">{{ post.get_absolute_url }}</span>"</span>&gt;</span><span class="variable">{{ post.title }}</span><span class="tag">&lt;/<span class="title">a</span>&gt;</span><span class="tag">&lt;/<span class="title">h1</span>&gt;</span>
+        <span class="variable">{{ post.text }}</span>
+        <span class="template_tag">{% get_comment_count <span class="keyword">for</span> post <span class="keyword">as</span> comment_count %}</span>
+        <span class="tag">&lt;<span class="title">h3</span>&gt;</span>Comments: <span class="variable">{{ comment_count }}</span><span class="tag">&lt;/<span class="title">h3</span>&gt;</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endfor</span> %}</span>
+        <span class="tag">&lt;<span class="title">br</span> /&gt;</span>
+        <span class="template_tag">{% <span class="keyword">if</span> page_obj.has_previous %}</span>
+        <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/<span class="variable">{{ page_obj.previous_page_number }}</span>/"</span>&gt;</span>Previous Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+        <span class="template_tag">{% <span class="keyword">if</span> page_obj.has_next %}</span>
+        <span class="tag">&lt;<span class="title">a</span> <span class="attribute">href</span>=<span class="value">"/<span class="variable">{{ page_obj.next_page_number }}</span>/"</span>&gt;</span>Next Page<span class="tag">&lt;/<span class="title">a</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+        <span class="template_tag">{% <span class="keyword">else</span> %}</span>
+        <span class="tag">&lt;<span class="title">div</span> <span class="attribute">class</span>=<span class="value">"post"</span>&gt;</span>
+        <span class="tag">&lt;<span class="title">p</span>&gt;</span>No posts matched<span class="tag">&lt;/<span class="title">p</span>&gt;</span>
+        <span class="tag">&lt;/<span class="title">div</span>&gt;</span>
+        <span class="template_tag">{% <span class="keyword">endif</span> %}</span>
+<span class="template_tag">{% <span class="keyword">include</span> 'footer.html' %}</span><span class="template_tag">{% endraw %}</span></code></pre>
+<p>The changes here are minimal, just adjusting the names of objects to what the generic view uses. Now, if you refresh the browser, you should be able to see your blog posts, only now they&#39;re being handled by Django&#39;s ListView generic view. But they&#39;re in the wrong order, so go into blogengine/models.py and add this code to the Post model:</p>
+<p><code>python blogengine/models.py
+    class Meta:
+        ordering = [&quot;-pub_date&quot;]</code></p>
+<p>This defines the order the Post objects should be in the model, rather than the view. If you now refresh the browser, they should be in the right order.</p>
+<p>A ListView is only one of the generic views available in Django. There are others that are useful under other circumstances, but they&#39;re beyond the scope of this tutorial, so I suggest that if you&#39;re interested, you take the time to learn more about them on your own. They can save you a lot of time and effort if used well.</p>
+<p>Sadly, that brings this series of tutorials to an end. I hope you&#39;ve enjoyed learning about Django, and I hope you&#39;ll be inspired to build something cool with it! As always, the code is available on <a href="https://github.com/matthewbdaly/Django-Tutorial-Blog">GitHub</a>, so feel free to download it, use it as the basis for your own projects, or whatever else you&#39;d like to do with it.</p>
+
+  </section>
+    <section>
+        <p>
+          23rd April 2012
+          
+            by Matthew Daly
+          
+        </p>
+    </section>
+
+  <ul class="pager">
+      
+        <li><a href="/posts/2012-05-31-dumping-wordpress-for-octopress.html">Newer</a></li>
+      
+      
+        <li><a href="/posts/2012-03-29-yet-another-tutorial-for-building-a-blog-using-python-and-django-part-4.html">Older</a></li>
+      
+    </ul>
+  <section class="comments">
+    
+      <div id="disqus_thread"></div>
+      <script type="text/javascript">
+        window.disqus_identifier="";
+        window.disqus_url="http://www.matthewdaly.co.uk/posts/2012-04-23-yet-another-tutorial-for-building-a-blog-using-python-and-django-part-5.html";
+        window.disqus_title="Yet another tutorial for building a blog using Python and Django - part 5";
+      </script>
+        <script type="text/javascript" src="http://disqus.com/forums/mattbd/embed.js"></script>
+        <noscript><a href="http://mattbd.disqus.com/?url=ref">View the discussion thread.</a></noscript>
+    
+    
+  </section>
+</article>
+
+        </div>
+
+        <footer>
+            <div class="container">
+                Copyright Matthew Daly, 2014.
+            </div>
+        </footer>
+        <script type="text/javascript" src="/static/js/dependencies.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script>
+    </body>
+</html>

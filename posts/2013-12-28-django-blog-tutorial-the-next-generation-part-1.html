@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta property="fb:app_id" content=""/>
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/bootstrap-sass/dist/css/bootstrap.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/flat-ui/dist/css/flat-ui.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/highlightjs/styles/zenburn.css" media="all" />
+        <link rel="alternate" type="application/rss+xml" title="A Series of Quite Extraordinary Events - feed" href="/index.xml" />
+        <title>A Series of Quite Extraordinary Events - Django blog tutorial - the next generation - part 1</title>
+    </head>
+    <body>
+        <header>
+            <div class="container">
+                <div class="page-header">
+                    <h1>A Series of Quite Extraordinary Events</h1>
+                    <h2>Being the blog of Matthew Daly Esquire</h2>
+                    <nav>
+                        <a href="/">Home</a> | <a href="/archive.html">Archives</a> | <a href="/about.html">About</a> | <a href="/rss.xml">RSS</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <article class="post">
+    
+  <div class="title">
+    <h1><a href="/posts/2013-12-28-django-blog-tutorial-the-next-generation-part-1.html">Django blog tutorial - the next generation - part 1</a></h1>
+  </div>
+  <section>
+    <p>My series of Django tutorials for building a blogging engine are by far the most popular posts I&#39;ve ever written on here. I&#39;ve had a lot of people contact me with questions or just to express their thanks, for which I&#39;m very grateful!</p>
+<p>However, these tutorials haven&#39;t really aged well. I&#39;ve since had the opportunity to use Django in a professional capacity, which has significantly improved my understanding of the framework and the whole Python ecosystem, and there&#39;s a lot of best practices that I didn&#39;t follow and now wish I had. There&#39;s also been a few gotchas that have hindered a few people in the past that I&#39;d like to have the opportunity to correct.</p>
+<p>So, I&#39;m therefore creating a brand new series of tutorials to remedy this situation. This series will cover exactly the same basic idea of using Django to build a blogging engine, but will expand on what the original series did in many ways. We will cover such additional topics as:</p>
+<ul>
+<li>Using Twitter Bootstrap to make your blog look good without too much hassle</li>
+<li>Using Virtualenv to sandbox your blog application</li>
+<li>Using South to effectively manage changes to your database structure</li>
+<li>Writing some simple unit tests</li>
+<li>Deploying the finished application to Heroku</li>
+</ul>
+<p>Ready? Let&#39;s get started!</p>
+<h2 id="getting-everything-set-up">Getting everything set up</h2>
+<p>Now, first of all, I&#39;m going to assume you&#39;re using some variant of Unix, such as Linux or Mac OS X. I&#39;m not saying you can&#39;t follow this tutorial with Windows, but you&#39;ll have a harder time, because Windows just isn&#39;t as developer-friendly as Unix in general. A modern Linux distro like Ubuntu is generally pretty easy to use, and you can easily run it in Virtualbox, so if you use Windows I would recommend you use that to make things easier.</p>
+<p>You should also have at least a basic grasp of the command line, such as how to create and navigate directories. You don&#39;t have to be a wizard with it, though.</p>
+<p>You also need a proper programmer&#39;s text editor. I use Vim, but I freely admit that Vim has a very steep learning curve and you may have trouble picking it up at the same time as following this tutorial. Emacs is also a very powerful text editor, and if you like it, feel free to use it. If you haven&#39;t yet found a programmer&#39;s text editor you like, I suggest you check out <a href="http://www.sublimetext.com/">Sublime Text</a>, which is easy to get started with, but also very powerful, and can be used without purchasing a license. Don&#39;t worry too much about your text editor - it&#39;s not vitally import that you use what I use, just find one that works for you. That said, I will say one thing - DON&#39;T use an IDE. IDE&#39;s hide too many details from new users and make it harder to figure out what&#39;s going on.</p>
+<p>You will also need to ensure you have the following installed:</p>
+<ul>
+<li>Python. I recommend installing Python 2.7, because you may have issues with Python 2.6, and Python 3 isn&#39;t universally supported yet so you might have some issues with that</li>
+<li>Virtualenv</li>
+<li>Pip</li>
+<li>Git</li>
+</ul>
+<p>On most Linux distros, you can find packages for all of these items easily enough using your package manager. On Mac OS X, I recommend using Homebrew to install them, though if you have another package manager installed you can use that too. If you have issues with installing any of these, a quick Google search should be sufficient to resolve the issue.</p>
+<h2 id="beginning-work">Beginning work</h2>
+<p>With all that done, we&#39;re ready to get started. Create a folder in a suitable place on your file system and switch into it. I generally keep a dedicated folder in my home directory called <code>Projects</code> to use for all of my projects, and give each project a folder within it - in this case the project is called <code>django_tutorial_blog_ng</code>.</p>
+<p>Now, we&#39;ll use Git to keep track of our source code. If you prefer Mercurial, feel free to use that, but this tutorial will assume use of Git, so you&#39;ll want to adapt the commands used accordingly. Start tracking your project with the following command from the shell, when you&#39;re in the project directory:</p>
+<pre><code class="lang-bash">git init</code></pre>
+<p>If you haven&#39;t used Git before, you&#39;ll also want to <a href="http://git-scm.com/book/en/Getting-Started-First-Time-Git-Setup">configure it</a>.</p>
+<p>Next, we set up our virtualenv. Run the following command:</p>
+<pre><code class="lang-bash">virtualenv venv --distribute</code></pre>
+<p>Followed by:</p>
+<pre><code class="lang-bash">source venv/bin/activate</code></pre>
+<p>Every time you come back to work on this project, you&#39;ll need to run the previous command to make sure you&#39;re running the version of Python installed under venv/ rather than your system Python. You can tell it&#39;s using this because your shell prompt will be prefixed with <code>(venv)</code>.</p>
+<p>Why do this? Well, it means you can install whatever version of a Python module you like, without having root access, and means the Python install you&#39;re using will only have those modules you explicitly install, rather than all of those ones available with your operating system. For instance, you could have multiple projects using different versions of Django, rather than having to update a global installation of Django and potentially break existing applications.</p>
+<p>Now that our virtualenv is set up, we&#39;ll install Django, as well as several other useful Python modules. Run the following command:</p>
+<pre><code class="lang-bash">pip install django-toolbelt South</code></pre>
+<p>A little explanation is called for here. The package <code>django-toolbelt</code> includes a number of packages we&#39;ll be using, including Django, as well as Gunicorn (a simple web server we&#39;ll use when the time comes to deploy the app to Heroku). South is a migration tool that is commonly used with Django - basically, if you make changes to existing models, Django doesn&#39;t natively have the capacity to apply those changes (yet - native migrations are planned at some point in the future), so South can be used to apply those changes for you without having to either manually change the database structure or dump the database and rebuild it.</p>
+<p>Please note that one of the packages, <code>psycopg2</code>, may fail if you don&#39;t have PostgreSQL installed, but don&#39;t worry about installing it. We&#39;ll be using SQLite for developing the application locally, and we&#39;ll be deploying the finished product to Heroku, which does have it installed.</p>
+<p>Once the installation is complete, run the following command to record the new modules installed:</p>
+<pre><code class="lang-bash">pip freeze &gt; requirements.txt</code></pre>
+<p>The file <code>requirements.txt</code> will be created, which stores the packages and versions you have installed so that they can be easily recreated. If you had issues installing <code>psycopg2</code>, then here&#39;s what your <code>requirements.txt</code> should look like - feel free to edit it manually to look like this, as when we deploy it to Heroku, it will need to be correct to ensure that our application can be deployed successfully:</p>
+<p>``` bash requirements.txt
+Django==1.6.1
+South==0.8.4
+dj-database-url==0.2.2
+dj-static==0.0.5
+django-toolbelt==0.0.1
+gunicorn==18.0
+psycopg2==2.5.1
+static==0.4
+wsgiref==0.1.2</p>
+<pre><code>
+Next, we'll <span class="operator"><span class="keyword">commit</span> these changes <span class="keyword">with</span> Git:
+
+<span class="string">``</span><span class="string">` bash
+git add requirements.txt
+git commit -m 'Committed requirements'</code></pre>
+<p>Next we&#39;ll add a <code>.gitignore</code> file to ignore our virtualenv - we want to keep this out of version control because it&#39;s something specific to that install. We have all we need to recreate it so we don&#39;t want to store it. In addition, we also want to ignore any compiled Python files (identifiable by the .pyc suffix):</p>
+<p>``` bash .gitignore
+venv/
+*.pyc</p>
+<pre><code>
+Let's <span class="operator"><span class="keyword">commit</span> that too:
+
+<span class="string">``</span><span class="string">` bash
+git add .gitignore
+git commit -m 'Added a gitignore file'</code></pre>
+<p>Now, let&#39;s generate our project&#39;s basic skeleton:</p>
+<pre><code class="lang-bash">django-admin.py startproject django_tutorial_blog_ng .</code></pre>
+<p>This application skeleton includes a basic configuration which will be sufficient for now, but you will also want to add the SQLite database file to your <code>.gitignore</code>:</p>
+<p>``` bash .gitignore
+env/
+*.pyc
+db.sqlite3</p>
+<pre><code>
+Let<span class="attribute">'s</span> commit what we<span class="attribute">'ve</span> done:
+
+``` bash
+git add .gitignore django_tutorial_blog_ng/ manage.py
+git commit -m <span class="attribute">'Created</span> project skeleton'</code></pre>
+<p>Now, before we create our database, we need to ensure we are using South. Go into <code>django_tutorial_blog_ng/settings.py</code> and find <code>INSTALLED_APPS</code>. Edit it to look like this:</p>
+<p>``` python django_tutorial_blog_ng/settings.py
+INSTALLED_APPS = (
+    &#39;django.contrib.admin&#39;,
+    &#39;django.contrib.auth&#39;,
+    &#39;django.contrib.contenttypes&#39;,
+    &#39;django.contrib.sessions&#39;,
+    &#39;django.contrib.messages&#39;,
+    &#39;django.contrib.staticfiles&#39;,
+    &#39;south&#39;,
+)</p>
+<pre><code>
+Now, you can <span class="operator"><span class="keyword">create</span> your database. Run the following command:
+
+<span class="string">``</span><span class="string">` bash
+python manage.py syncdb</code></pre>
+<p>You&#39;ll be prompted to create a superuser - go ahead and fill in the details. Now, run the following command:</p>
+<pre><code class="lang-bash">python manage.py runserver</code></pre>
+<p>This will run Django&#39;s built-in web server on port 8000, and if you click <a href="http://127.0.0.1:8000">here</a>, you should see a page congratulating you on your first Django-powered page. Once you&#39;re finished with it, you can stop the web server with Ctrl-C.</p>
+<p>Don&#39;t forget to commit your changes:</p>
+<pre><code class="lang-bash">git add django_tutorial_blog_ng/settings.py
+git commit -m <span class="string">'Added South to installed apps'</span></code></pre>
+<h2 id="your-first-app">Your first app</h2>
+<p>Django distinguishes between the concepts of <strong>projects</strong> and <strong>apps</strong>. A project is a specific project that may consist of one or more apps, such as a web app, whereas an app is a set of functionality within a project. For instance, one website might include some flat pages, an admin interface, and a blogging engine, and these could easily be different apps. By encouraging you to separate different types of functionality into different apps, Django makes it easier for you to reuse existing content elsewhere.</p>
+<p>We&#39;re going to create our first app, which is the blogging engine. Run the following command to create a basic skeleton for this app:</p>
+<pre><code class="lang-bash">python manage.py startapp blogengine</code></pre>
+<p>Next, we need to amend our settings to install this app:</p>
+<p>``` python django_tutorial_blog_ng/settings.py
+INSTALLED_APPS = (
+    &#39;django.contrib.admin&#39;,
+    &#39;django.contrib.auth&#39;,
+    &#39;django.contrib.contenttypes&#39;,
+    &#39;django.contrib.sessions&#39;,
+    &#39;django.contrib.messages&#39;,
+    &#39;django.contrib.staticfiles&#39;,
+    &#39;south&#39;,
+    &#39;blogengine&#39;,
+)</p>
+<pre><code>
+Now, <span class="keyword">before</span> we can use this app, we want <span class="keyword">to</span> let South know <span class="keyword">about</span> <span class="keyword">it</span> so <span class="keyword">that</span> changes <span class="keyword">to</span> your database structure will be managed right <span class="keyword">from</span> <span class="keyword">the</span> start <span class="keyword">by</span> South. Run <span class="keyword">the</span> following command <span class="keyword">to</span> create your initial migration:
+
+``` bash
+python manage.py schemamigration <span class="comment">--initial blogengine</span></code></pre>
+<p>That creates the file for your first migration,but doesn&#39;t run it. To migrate your database structure to the latest version, run the following:</p>
+<pre><code class="lang-bash">python manage.py migrate</code></pre>
+<p>This won&#39;t actually make any changes, but it will ensure that all future changes to your models for the <code>blogengine</code> app are handled by South. Let&#39;s commit our app skeleton:</p>
+<pre><code class="lang-bash">git add django_tutorial_blog_ng/settings.py blogengine/
+git commit -m <span class="string">'Added blogengine app skeleton'</span></code></pre>
+<p>So, we now have our first app set up, but it doesn&#39;t do anything much.</p>
+<p>Remember that I mentioned how Django differentiates between projects and apps? Well, Django actually ships with a number of useful apps, and one of those is the admin interface. I consider the Django admin to be one of the framework&#39;s killer features because it&#39;s easy to use and customise, and saves you a lot of grief.</p>
+<p>In the past, the admin interface needed a little work to get it working, but in Django 1.6 it&#39;s configured to work out of the box, so if you click <a href="http://127.0.0.1:8000/admin/">here</a>, you should see the login screen for it. You should be able to sign in using the username and password you set when you ran <code>syncdb</code>.</p>
+<p>Next, we&#39;ll set up our first model.</p>
+<h2 id="an-introduction-to-mvc">An introduction to MVC</h2>
+<p>MVC is a common pattern used in web development. Many web development frameworks can be loosely described as MVC, including Django, Rails, CodeIgniter, Laravel and Symfony, as well as some client-side frameworks like Backbone.js. The basic concept is that a web app is divided into three basic components:</p>
+<ul>
+<li><strong>Models</strong> - the data managed with the application</li>
+<li><strong>Views</strong> - the presentation of the data</li>
+<li><strong>Controllers</strong> - an intermediary between the models and the views</li>
+</ul>
+<p>Now, Django&#39;s interpretation of MVC is slightly different to many other frameworks. While in most frameworks the views are HTML templates for rendering the data, in Django this role is taken by the templates, and the views are functions or objects that render data from the models using a template. Effectively, you can think of Django&#39;s views as being like controllers in other frameworks, and Django templates as being views.</p>
+<p>In Django, you create your models as Python classes that represent your data, and you use the Django ORM to query the database. As a result, it&#39;s rare to have to directly query your database using SQL, making it more portable between different databases.</p>
+<p>Now, our first model is going to be of a blog post. At least initially, each post will have the following attributes:</p>
+<ul>
+<li>A title</li>
+<li>A publication date and time</li>
+<li>Some text</li>
+</ul>
+<p>Now, we could just jump straight into creating our first model, but we&#39;re going to make a point of following the practices of test-driven development here. The basic concept of TDD is that you write a failing test before writing any code, then you write the code to pass that test afterwards. It does make things a bit slower, but it&#39;s all too easy to neglect writing tests at all if you leave it till later.</p>
+<p>If you take a look in the <code>blogengine</code> folder you&#39;ll notice there&#39;s a file called <code>tests.py</code>. Open it up and you should see the following:</p>
+<p>``` python blogengine/tests.py
+from django.test import TestCase</p>
+<h1 id="create-your-tests-here-">Create your tests here.</h1>
+<pre><code>
+It's worth taking a little <span class="property">time</span> <span class="keyword">to</span> plan out what we want <span class="keyword">to</span> test <span class="keyword">from</span> our post model. Each post object will have <span class="keyword">the</span> attributes I mentioned <span class="keyword">above</span>, <span class="keyword">and</span> what we want <span class="keyword">to</span> be able <span class="keyword">to</span> do <span class="keyword">is</span> test <span class="keyword">that</span> we can:
+
+* Set <span class="keyword">the</span> title
+* Set <span class="keyword">the</span> publication <span class="type">date</span> <span class="keyword">and</span> <span class="property">time</span>
+* Set <span class="keyword">the</span> <span class="type">text</span>
+* Save <span class="keyword">it</span> successfully
+* Retrieve <span class="keyword">it</span> successfully
+
+So, let's create a test <span class="keyword">for</span> our post model. We'll go <span class="keyword">through</span> <span class="keyword">the</span> relevant sections <span class="keyword">of</span> <span class="keyword">the</span> test bit <span class="keyword">by</span> bit:
+
+``` python blogengine/tests.py
+<span class="keyword">from</span> django.test import TestCase
+<span class="keyword">from</span> django.utils import timezone
+<span class="keyword">from</span> blogengine.models import Post</code></pre>
+<p>Here we&#39;re importing the required functionality. <code>TestCase</code> is provided by Django, and is an object all of your tests should inherit from. <code>timezone</code> is a utility for handling dates and times correctly. Finally, <code>Post</code> is our model, which we have yet to implement.</p>
+<p>``` python blogengine/tests.py</p>
+<h1 id="create-your-tests-here-">Create your tests here.</h1>
+<p>class PostTest(TestCase):
+    def test_create_post(self):</p>
+<pre><code>    <span class="comment"># Create the post</span>
+    <span class="title">post</span> = Post()</code></pre>
+<pre><code>
+Here we create <span class="keyword">the</span> PostTest <span class="type">class</span>, which represents a test <span class="keyword">for</span> your `Post` model. So far <span class="keyword">it</span> only has one method, <span class="keyword">but</span> you can add additional ones <span class="keyword">if</span> required.
+
+``` python blogengine/tests.py
+
+        <span class="comment"># Set the attributes</span>
+        post.title = 'My <span class="keyword">first</span> post'
+        post.<span class="type">text</span> = 'This <span class="keyword">is</span> <span class="keyword">my</span> <span class="keyword">first</span> blog post'
+        post.pub_date = timezone.now()</code></pre>
+<p>Here we set the post&#39;s attributes.</p>
+<p>``` python blogengine/tests.py</p>
+<pre><code>    <span class="preprocessor"># Save it</span>
+    post<span class="variable">.save</span>()</code></pre>
+<pre><code>
+Now we save <span class="keyword">it</span>. At this point <span class="keyword">it</span> has been added <span class="keyword">to</span> <span class="keyword">the</span> database, <span class="keyword">and</span> <span class="keyword">the</span> <span class="property">rest</span> <span class="keyword">of</span> <span class="keyword">the</span> test involves us ensuring <span class="keyword">it</span> has been saved correctly <span class="keyword">and</span> can be retrieved.
+
+``` python blogengine/tests.py
+
+        <span class="comment"># Check we can find it</span>
+        all_posts = Post.objects.all()
+        self.assertEquals(len(all_posts), <span class="number">1</span>)
+        only_post = all_posts[<span class="number">0</span>]
+        self.assertEquals(only_post, post)</code></pre>
+<p>Here we use the Django database API to fetch all of the Post objects, assert that there is only 1 post object, retrieve that post object, and assert that it is the same object as the post object we just saved.</p>
+<p>If unit testing is new to you, assertions may be new to you. Essentially you&#39;re saying to the Python interpreter, &quot;I assert that X is true, so please raise an error if this is not true&quot;. Here we assert that the length of the variable <code>all_posts</code> is 1, and that that post is the same object as the previously saved object, so that the test will fail if that is not the case.</p>
+<p>``` python blogengine/tests.py</p>
+<pre><code>    # Check attributes
+    self.assertEquals(only_post.title, <span class="comment">'My first post')</span>
+    self.assertEquals(only_post.text, <span class="comment">'This is my first blog post')</span>
+    self.assertEquals(only_post.pub_date.<span class="built_in">day</span>, post.pub_date.<span class="built_in">day</span>)
+    self.assertEquals(only_post.pub_date.<span class="built_in">month</span>, post.pub_date.<span class="built_in">month</span>)
+    self.assertEquals(only_post.pub_date.<span class="built_in">year</span>, post.pub_date.<span class="built_in">year</span>)
+    self.assertEquals(only_post.pub_date.<span class="built_in">hour</span>, post.pub_date.<span class="built_in">hour</span>)
+    self.assertEquals(only_post.pub_date.<span class="built_in">minute</span>, post.pub_date.<span class="built_in">minute</span>)
+    self.assertEquals(only_post.pub_date.<span class="built_in">second</span>, post.pub_date.<span class="built_in">second</span>)</code></pre>
+<pre><code>
+Finally, we assert <span class="keyword">that</span> <span class="keyword">the</span> values <span class="keyword">of</span> each <span class="keyword">of</span> <span class="keyword">the</span> post's attributes <span class="keyword">as</span> stored <span class="keyword">in</span> <span class="keyword">the</span> database match up <span class="keyword">with</span> those <span class="keyword">in</span> <span class="keyword">the</span> post object we <span class="keyword">set</span>. For <span class="keyword">the</span> `title` <span class="keyword">and</span> `<span class="type">text</span>` fields, these are easy <span class="keyword">to</span> validate <span class="keyword">as</span> we can just check <span class="keyword">the</span> values <span class="keyword">against</span> those we <span class="keyword">set</span>. For <span class="keyword">the</span> `pub_date` field, things are a bit more complex, <span class="keyword">since</span> this will be an object <span class="keyword">in</span> <span class="keyword">its</span> own right, so you need <span class="keyword">to</span> check <span class="keyword">the</span> <span class="property">day</span>, <span class="property">month</span>, <span class="property">year</span>, hour, minute <span class="keyword">and</span> <span class="keyword">second</span> attributes separately.
+
+The whole thing should look like this:
+
+``` python blogengine/tests.py
+<span class="keyword">from</span> django.test import TestCase
+<span class="keyword">from</span> django.utils import timezone
+<span class="keyword">from</span> blogengine.models import Post
+
+<span class="comment"># Create your tests here.</span>
+<span class="type">class</span> PostTest(TestCase):
+    def test_create_post(self):
+        <span class="comment"># Create the post</span>
+        post = Post()
+
+        <span class="comment"># Set the attributes</span>
+        post.title = 'My <span class="keyword">first</span> post'
+        post.<span class="type">text</span> = 'This <span class="keyword">is</span> <span class="keyword">my</span> <span class="keyword">first</span> blog post'
+        post.pub_date = timezone.now()
+
+        <span class="comment"># Save it</span>
+        post.save()
+
+        <span class="comment"># Check we can find it</span>
+        all_posts = Post.objects.all()
+        self.assertEquals(len(all_posts), <span class="number">1</span>)
+        only_post = all_posts[<span class="number">0</span>]
+        self.assertEquals(only_post, post)
+
+        <span class="comment"># Check attributes</span>
+        self.assertEquals(only_post.title, 'My <span class="keyword">first</span> post')
+        self.assertEquals(only_post.<span class="type">text</span>, 'This <span class="keyword">is</span> <span class="keyword">my</span> <span class="keyword">first</span> blog post')
+        self.assertEquals(only_post.pub_date.<span class="property">day</span>, post.pub_date.<span class="property">day</span>)
+        self.assertEquals(only_post.pub_date.<span class="property">month</span>, post.pub_date.<span class="property">month</span>)
+        self.assertEquals(only_post.pub_date.<span class="property">year</span>, post.pub_date.<span class="property">year</span>)
+        self.assertEquals(only_post.pub_date.hour, post.pub_date.hour)
+        self.assertEquals(only_post.pub_date.minute, post.pub_date.minute)
+        self.assertEquals(only_post.pub_date.<span class="keyword">second</span>, post.pub_date.<span class="keyword">second</span>)</code></pre>
+<p>With that in place, the time has come to run our test with the following command:</p>
+<pre><code class="lang-bash">python manage.py test</code></pre>
+<p>You should see something like this:</p>
+<pre><code><span class="comment">(venv)Smith:django_tutorial_blog_ng</span> <span class="comment">matthewdaly$</span> <span class="comment">python</span> <span class="comment">manage</span>.<span class="comment">py</span> <span class="comment">test</span>
+<span class="comment">Creating</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span>
+<span class="comment">E</span>
+<span class="comment">======================================================================</span>
+<span class="comment">ERROR:</span> <span class="comment">blogengine</span>.<span class="comment">tests</span> <span class="comment">(unittest</span>.<span class="comment">loader</span>.<span class="comment">ModuleImportFailure)</span>
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">ImportError:</span> <span class="comment">Failed</span> <span class="comment">to</span> <span class="comment">import</span> <span class="comment">test</span> <span class="comment">module:</span> <span class="comment">blogengine</span>.<span class="comment">tests</span>
+<span class="comment">Traceback</span> <span class="comment">(most</span> <span class="comment">recent</span> <span class="comment">call</span> <span class="comment">last):</span>
+  <span class="comment">File</span> <span class="comment">"/usr/local/Cellar/python/2</span>.<span class="comment">7</span>.<span class="comment">6/Frameworks/Python</span>.<span class="comment">framework/Versions/2</span>.<span class="comment">7/lib/python2</span>.<span class="comment">7/unittest/loader</span>.<span class="comment">py"</span>, <span class="comment">line</span> <span class="comment">254</span>, <span class="comment">in</span> <span class="comment">_find_tests</span>
+    <span class="comment">module</span> <span class="comment">=</span> <span class="comment">self</span>.<span class="comment">_get_module_from_name(name)</span>
+  <span class="comment">File</span> <span class="comment">"/usr/local/Cellar/python/2</span>.<span class="comment">7</span>.<span class="comment">6/Frameworks/Python</span>.<span class="comment">framework/Versions/2</span>.<span class="comment">7/lib/python2</span>.<span class="comment">7/unittest/loader</span>.<span class="comment">py"</span>, <span class="comment">line</span> <span class="comment">232</span>, <span class="comment">in</span> <span class="comment">_get_module_from_name</span>
+    <span class="comment">__import__(name)</span>
+  <span class="comment">File</span> <span class="comment">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests</span>.<span class="comment">py"</span>, <span class="comment">line</span> <span class="comment">3</span>, <span class="comment">in</span> &lt;<span class="comment">module</span>&gt;
+    <span class="comment">from</span> <span class="comment">blogengine</span>.<span class="comment">models</span> <span class="comment">import</span> <span class="comment">Post</span>
+<span class="comment">ImportError:</span> <span class="comment">cannot</span> <span class="comment">import</span> <span class="comment">name</span> <span class="comment">Post</span>
+
+
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Ran</span> <span class="comment">1</span> <span class="comment">test</span> <span class="comment">in</span> <span class="comment">0</span>.<span class="comment">000s</span>
+
+<span class="comment">FAILED</span> <span class="comment">(errors=1)</span>
+<span class="comment">Destroying</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span></code></pre>
+<p>Don&#39;t worry about the error - this is exactly what we expect to see because we haven&#39;t implemented our Post model yet. Now that we have a failing test in place, we can implement our model to make the test pass. Open up <code>blogengine/models.py</code> and enter the following:</p>
+<p>``` python blogengine/models.py
+from django.db import models</p>
+<h1 id="create-your-models-here-">Create your models here.</h1>
+<p>class Post(models.Model):
+    title = models.CharField(max_length=200)
+    pub_date = models.DateTimeField()
+    text = models.TextField()</p>
+<pre><code>
+Save <span class="keyword">the</span> <span class="type">file</span> <span class="keyword">and</span> <span class="command">run</span> <span class="keyword">the</span> test again:</code></pre>
+<p>(venv)Smith:django_tutorial_blog_ng matthewdaly$ python manage.py test
+Creating test database for alias &#39;default&#39;...</p>
+<h1 id="e">E</h1>
+<h2 id="error-test_create_post-blogengine-tests-posttest-">ERROR: test_create_post (blogengine.tests.PostTest)</h2>
+<p>Traceback (most recent call last):
+  File &quot;/Users/matthewdaly/Projects/django<em>tutorial<em>blog_ng/blogengine/tests.py&quot;, line 17, in test_create_post
+    post.save()
+  File &quot;/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/base.py&quot;, line 545, in save
+    force_update=force_update, update_fields=update_fields)
+  File &quot;/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/base.py&quot;, line 573, in save_base
+    updated = self._save_table(raw, cls, force_insert, force_update, using, update_fields)
+  File &quot;/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/base.py&quot;, line 654, in _save_table
+    result = self._do_insert(cls._base_manager, using, fields, update_pk, raw)
+  File &quot;/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/base.py&quot;, line 687, in _do_insert
+    using=using, raw=raw)
+  File &quot;/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/manager.py&quot;, line 232, in _insert
+    return insert_query(self.model, objs, fields, **kwargs)
+  File &quot;/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/query.py&quot;, line 1511, in insert_query
+    return query.get_compiler(using=using).execute_sql(return_id)
+  File &quot;/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/models/sql/compiler.py&quot;, line 898, in execute_sql
+    cursor.execute(sql, params)
+  File &quot;/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/backends/util.py&quot;, line 53, in execute
+    return self.cursor.execute(sql, params)
+  File &quot;/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/utils.py&quot;, line 99, in __exit</em></em>
+    six.reraise(dj_exc_type, dj_exc_value, traceback)
+  File &quot;/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/backends/util.py&quot;, line 53, in execute
+    return self.cursor.execute(sql, params)
+  File &quot;/Users/matthewdaly/Projects/django_tutorial_blog_ng/venv/lib/python2.7/site-packages/django/db/backends/sqlite3/base.py&quot;, line 450, in execute
+    return Database.Cursor.execute(self, query, params)
+OperationalError: no such table: blogengine_post</p>
+<hr>
+<p>Ran 1 test in 0.059s</p>
+<p>FAILED (errors=1)
+Destroying test database for alias &#39;default&#39;...</p>
+<pre><code>
+Our test still fails, but <span class="keyword">if</span> we take a look at <span class="keyword">this</span> error message, we can see why - there <span class="keyword">is</span> <span class="literal">no</span> database table <span class="keyword">for</span> the posts (called `<span class="javascript">blogengine_post</span>`). Using South, we can easily remedy that <span class="keyword">by</span> creating a <span class="keyword">new</span> migration to create <span class="keyword">this</span> table:
+
+`<span class="javascript"></span>``<span class="javascript"> bash
+python manage.py schemamigration --auto blogengine</span></code></pre>
+<p>That creates the new migration. Now let&#39;s run it:</p>
+<pre><code class="lang-bash">python manage.py migrate</code></pre>
+<p>Now, let&#39;s run our tests to check it&#39;s working as expected:</p>
+<pre><code><span class="comment">(venv)Smith:django_tutorial_blog_ng</span> <span class="comment">matthewdaly$</span> <span class="comment">python</span> <span class="comment">manage</span>.<span class="comment">py</span> <span class="comment">test</span>
+<span class="comment">Creating</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span>
+<span class="string">.</span>
+<span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span><span class="literal">-</span>
+<span class="comment">Ran</span> <span class="comment">1</span> <span class="comment">test</span> <span class="comment">in</span> <span class="comment">0</span>.<span class="comment">001s</span>
+
+<span class="comment">OK</span>
+<span class="comment">Destroying</span> <span class="comment">test</span> <span class="comment">database</span> <span class="comment">for</span> <span class="comment">alias</span> <span class="comment">'default'</span>.<span class="string">.</span><span class="string">.</span></code></pre>
+<p>Success! We now have a model in place that passes our test. Let&#39;s commit our changes:</p>
+<pre><code class="lang-bash">git add blogengine/
+git commit -m <span class="string">'Added post model with passing test'</span></code></pre>
+<p>Now, Django&#39;s ORM is basically a layer on top of SQL that abstracts away differences between different relational databases, but the underlying queries are still being run. You can view the SQL created to generate the table by using the <code>sqlall</code> command. Just run <code>python manage.py sqlall blogengine</code> and you should see something like this:</p>
+<pre><code class="lang-sql"><span class="operator"><span class="keyword">BEGIN</span>;</span>
+<span class="operator"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span> <span class="string">"blogengine_post"</span> (
+    <span class="string">"id"</span> <span class="keyword">integer</span> <span class="keyword">NOT</span> <span class="keyword">NULL</span> <span class="keyword">PRIMARY</span> <span class="keyword">KEY</span>,
+    <span class="string">"title"</span> <span class="keyword">varchar</span>(<span class="number">200</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,
+    <span class="string">"pub_date"</span> datetime <span class="keyword">NOT</span> <span class="keyword">NULL</span>,
+    <span class="string">"text"</span> text <span class="keyword">NOT</span> <span class="keyword">NULL</span>
+)
+;</span>
+
+<span class="operator"><span class="keyword">COMMIT</span>;</span></code></pre>
+<p>Note the addition of the <code>id</code> field as the primary key. If you&#39;re at all familiar with relational databases, you&#39;ll know that every table must have one field, called a primary key, that is a unique reference to that row. This can be overridden, but here it&#39;s exactly the behaviour we want.</p>
+<h2 id="creating-blog-posts-via-the-admin">Creating blog posts via the admin</h2>
+<p>Now, we need a way to be able to create, edit and delete blog posts. Django&#39;s admin interface allows us to do so easily. However, before we do so, we want to create automated acceptance tests for this functionality, in order to test the ability to create posts from an end-user&#39;s perspective. While unit tests are for testing sections of an application&#39;s functionality from the perspective of other sections of the application, acceptance tests are testing from the user&#39;s perspective. In other words, they test what the application needs to do to be acceptable.</p>
+<p>First, we will test logging into the admin. Open up <code>blogengine/tests.py</code> and amend it as follows:</p>
+<p>``` python blogengine/tests.py
+from django.test import TestCase, LiveServerTestCase, Client
+from django.utils import timezone
+from blogengine.models import Post</p>
+<h1 id="create-your-tests-here-">Create your tests here.</h1>
+<p>class PostTest(TestCase):
+    def test_create_post(self):</p>
+<pre><code>    <span class="comment"># Create the post</span>
+    post = Post()
+
+    <span class="comment"># Set the attributes</span>
+    post.title = 'My <span class="keyword">first</span> post'
+    post.<span class="type">text</span> = 'This <span class="keyword">is</span> <span class="keyword">my</span> <span class="keyword">first</span> blog post'
+    post.pub_date = timezone.now()
+
+    <span class="comment"># Save it</span>
+    post.save()
+
+    <span class="comment"># Check we can find it</span>
+    all_posts = Post.objects.all()
+    self.assertEquals(len(all_posts), <span class="number">1</span>)
+    only_post = all_posts[<span class="number">0</span>]
+    self.assertEquals(only_post, post)
+
+    <span class="comment"># Check attributes</span>
+    self.assertEquals(only_post.title, 'My <span class="keyword">first</span> post')
+    self.assertEquals(only_post.<span class="type">text</span>, 'This <span class="keyword">is</span> <span class="keyword">my</span> <span class="keyword">first</span> blog post')
+    self.assertEquals(only_post.pub_date.<span class="property">day</span>, post.pub_date.<span class="property">day</span>)
+    self.assertEquals(only_post.pub_date.<span class="property">month</span>, post.pub_date.<span class="property">month</span>)
+    self.assertEquals(only_post.pub_date.<span class="property">year</span>, post.pub_date.<span class="property">year</span>)
+    self.assertEquals(only_post.pub_date.hour, post.pub_date.hour)
+    self.assertEquals(only_post.pub_date.minute, post.pub_date.minute)
+    self.assertEquals(only_post.pub_date.<span class="keyword">second</span>, post.pub_date.<span class="keyword">second</span>)</code></pre>
+<p>class AdminTest(LiveServerTestCase):
+    def test_login(self):</p>
+<pre><code>    # Create client
+    c = Client()
+
+    # <span class="keyword">Get</span> login page
+    <span class="built_in">response</span> = c.<span class="keyword">get</span>(<span class="comment">'/admin/')</span>
+
+    # Check <span class="built_in">response</span> code
+    self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)</code></pre>
+<pre><code>
+First <span class="keyword">of</span> all, we import two new objects <span class="keyword">from</span> `django.test`, `LiveServerTestCase` <span class="keyword">and</span> `Client`. Then we create <span class="keyword">the</span> <span class="keyword">first</span> part <span class="keyword">of</span> our <span class="keyword">first</span> test <span class="keyword">for</span> <span class="keyword">the</span> admin, named `AdminTest`. Eventually, this will test <span class="keyword">that</span> we can <span class="command">log</span> successfully <span class="keyword">into</span> <span class="keyword">the</span> admin interface. For now, we're just doing <span class="keyword">the</span> following:
+
+* Creating a Client object
+* Fetching <span class="keyword">the</span> `/admin/` route
+* Asserting <span class="keyword">that</span> <span class="keyword">the</span> status code <span class="keyword">for</span> this HTTP request <span class="keyword">is</span> <span class="number">200</span>, (<span class="keyword">in</span> other <span class="property">words</span>, <span class="keyword">that</span> <span class="keyword">the</span> page was fetched successfully).
+
+If you <span class="command">run</span> `python manage.py test`, you should see <span class="keyword">that</span> both tests pass successfully. Now we'll extend `AdminTest` - we'll verify <span class="keyword">that</span> <span class="keyword">the</span> response <span class="keyword">contains</span> <span class="keyword">the</span> <span class="type">string</span> 'Log <span class="keyword">in</span>', which <span class="keyword">in</span> <span class="keyword">the</span> Django admin interface, appears <span class="function_start"><span class="keyword">on</span> <span class="title">the</span></span> login page:
+
+``` python blogengine/tests.py
+<span class="type">class</span> AdminTest(LiveServerTestCase):
+    def test_login(self):
+        <span class="comment"># Create client</span>
+        c = Client()
+
+        <span class="comment"># Get login page</span>
+        response = c.<span class="keyword">get</span>('/admin/')
+
+        <span class="comment"># Check response code</span>
+        self.assertEquals(response.status_code, <span class="number">200</span>)
+
+        <span class="comment"># Check 'Log in' in response</span>
+        self.assertTrue('Log <span class="keyword">in</span>' <span class="keyword">in</span> response.content)</code></pre>
+<p>Here <code>response.content</code> is a string containing the content of the HTTP response - we&#39;re asserting that the substring &#39;Log in&#39; appears in there. If you run <code>python manage.py test</code> again, it should pass.</p>
+<p>Now, we need to actually log in. This could be fiddly, but Django has a handy convenience method to log you in when testing:</p>
+<p>``` python blogengine/tests.py
+class AdminTest(LiveServerTestCase):
+    def test_login(self):</p>
+<pre><code>    # Create client
+    c = Client()
+
+    # <span class="keyword">Get</span> login page
+    <span class="built_in">response</span> = c.<span class="keyword">get</span>(<span class="comment">'/admin/')</span>
+
+    # Check <span class="built_in">response</span> code
+    self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)
+
+    # Check <span class="comment">'Log in' in response</span>
+    self.assertTrue(<span class="comment">'Log in' in response.content)</span>
+
+    # <span class="built_in">Log</span> the user <span class="keyword">in</span>
+    c.login(username=<span class="comment">'bobsmith', password="password")</span>
+
+    # Check <span class="built_in">response</span> code
+    <span class="built_in">response</span> = c.<span class="keyword">get</span>(<span class="comment">'/admin/')</span>
+    self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)
+
+    # Check <span class="comment">'Log out' in response</span>
+    self.assertTrue(<span class="comment">'Log out' in response.content)</span></code></pre>
+<pre><code>
+Here, we use <span class="keyword">the</span> `login` method <span class="keyword">of</span> <span class="keyword">the</span> `Client` object <span class="keyword">to</span> <span class="command">log</span> <span class="keyword">into</span> <span class="keyword">the</span> admin interface, <span class="keyword">and</span> <span class="keyword">then</span> we fetch <span class="keyword">the</span> `/admin/` route again. We assert <span class="keyword">that</span> we <span class="keyword">get</span> a <span class="number">200</span> status code, <span class="keyword">and</span> we assert <span class="keyword">that</span> <span class="keyword">the</span> response <span class="keyword">contains</span> <span class="keyword">the</span> <span class="type">string</span> 'Log out' - <span class="keyword">in</span> other <span class="property">words</span>, <span class="keyword">that</span> we are logged <span class="keyword">in</span>.
+
+Try <span class="property">running</span> `python manage.py test` <span class="keyword">and</span> we'll <span class="keyword">get</span> an <span class="keyword">error</span>., because <span class="keyword">the</span> user details we've used <span class="keyword">to</span> <span class="command">log</span> <span class="keyword">in</span> don't exist. Let's resolve <span class="keyword">that</span>.
+
+Now, you could <span class="keyword">put</span> your own credentials <span class="keyword">in</span> there, <span class="keyword">but</span> <span class="keyword">that</span>'s <span class="keyword">not</span> a good idea because <span class="keyword">it</span>'s a security risk. Instead, we'll create a fixture <span class="keyword">for</span> <span class="keyword">the</span> test user <span class="keyword">that</span> will be loaded when <span class="keyword">the</span> tests are <span class="command">run</span>. Run <span class="keyword">the</span> following command:
+
+``` bash
+python manage.py createsuperuser</code></pre>
+<p>Give the username as <code>bobsmith</code>, the email address as <code>bob@example.com</code>, and the password as <code>password</code>. Once that&#39;s done, run these commands to dump the existing users to a fixture:</p>
+<pre><code class="lang-bash">mkdir blogengine/fixtures
+python manage.py dumpdata auth.User --indent=2 &gt; blogengine/fixtures/users.json</code></pre>
+<p>This will dump all of the existing users to <code>blogengine/fixtures/users.json</code>. You may wish to edit this file to remove your own superuser account and leave only the newly created one in there.</p>
+<p>Next we need to amend our test to load this fixture:</p>
+<p>``` python blogengine/tests.py
+class AdminTest(LiveServerTestCase):
+    fixtures = [&#39;users.json&#39;]</p>
+<pre><code><span class="function"><span class="keyword">def</span> <span class="title">test_login</span><span class="params">(self)</span>:</span>
+    <span class="comment"># Create client</span>
+    c = Client()
+
+    <span class="comment"># Get login page</span>
+    response = c.get(<span class="string">'/admin/'</span>)
+
+    <span class="comment"># Check response code</span>
+    self.assertEquals(response.status_code, <span class="number">200</span>)
+
+    <span class="comment"># Check 'Log in' in response</span>
+    self.assertTrue(<span class="string">'Log in'</span> <span class="keyword">in</span> response.content)
+
+    <span class="comment"># Log the user in</span>
+    c.login(username=<span class="string">'bobsmith'</span>, password=<span class="string">"password"</span>)
+
+    <span class="comment"># Check response code</span>
+    response = c.get(<span class="string">'/admin/'</span>)
+    self.assertEquals(response.status_code, <span class="number">200</span>)
+
+    <span class="comment"># Check 'Log out' in response</span>
+    self.assertTrue(<span class="string">'Log out'</span> <span class="keyword">in</span> response.content)</code></pre>
+<pre><code>
+<span class="built_in">Now</span>, <span class="keyword">if</span> you run `python manage.py test`, you should find that the test passes. <span class="keyword">Next</span>, we<span class="comment">'ll test that we can log out:</span>
+
+``` python blogengine/tests.py
+<span class="keyword">class</span> AdminTest(LiveServerTestCase):
+    fixtures = [<span class="comment">'users.json']</span>
+
+    def test_login(self):
+        # Create client
+        c = Client()
+
+        # <span class="keyword">Get</span> login page
+        <span class="built_in">response</span> = c.<span class="keyword">get</span>(<span class="comment">'/admin/')</span>
+
+        # Check <span class="built_in">response</span> code
+        self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)
+
+        # Check <span class="comment">'Log in' in response</span>
+        self.assertTrue(<span class="comment">'Log in' in response.content)</span>
+
+        # <span class="built_in">Log</span> the user <span class="keyword">in</span>
+        c.login(username=<span class="comment">'bobsmith', password="password")</span>
+
+        # Check <span class="built_in">response</span> code
+        <span class="built_in">response</span> = c.<span class="keyword">get</span>(<span class="comment">'/admin/')</span>
+        self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)
+
+        # Check <span class="comment">'Log out' in response</span>
+        self.assertTrue(<span class="comment">'Log out' in response.content)</span>
+
+    def test_logout(self):
+        # Create client
+        c = Client()
+
+        # <span class="built_in">Log</span> <span class="keyword">in</span>
+        c.login(username=<span class="comment">'bobsmith', password="password")</span>
+
+        # Check <span class="built_in">response</span> code
+        <span class="built_in">response</span> = c.<span class="keyword">get</span>(<span class="comment">'/admin/')</span>
+        self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)
+
+        # Check <span class="comment">'Log out' in response</span>
+        self.assertTrue(<span class="comment">'Log out' in response.content)</span>
+
+        # <span class="built_in">Log</span> out
+        c.logout()
+
+        # Check <span class="built_in">response</span> code
+        <span class="built_in">response</span> = c.<span class="keyword">get</span>(<span class="comment">'/admin/')</span>
+        self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)
+
+        # Check <span class="comment">'Log in' in response</span>
+        self.assertTrue(<span class="comment">'Log in' in response.content)</span></code></pre>
+<p>This test works along very similar lines. We log in, verify that &#39;Log out&#39; is in the response, then we log out, and verify that &#39;Log in&#39; is in the response. Run the tests again, and they should pass. Assuming they do, let&#39;s commit our changes again:</p>
+<pre><code class="lang-bash">git add blogengine/
+git commit -m <span class="string">'Added tests for admin auth'</span></code></pre>
+<p>This code is a little repetitive. We create the client twice, when we could do so only once. Amend the AdminTest class as follows:</p>
+<p>``` python blogengine/tests.py
+class AdminTest(LiveServerTestCase):
+    fixtures = [&#39;users.json&#39;]</p>
+<pre><code><span class="function"><span class="keyword">def</span> <span class="title">setUp</span><span class="params">(self)</span>:</span>
+    self.client = Client()
+
+<span class="function"><span class="keyword">def</span> <span class="title">test_login</span><span class="params">(self)</span>:</span>
+    <span class="comment"># Get login page</span>
+    response = self.client.get(<span class="string">'/admin/'</span>)
+
+    <span class="comment"># Check response code</span>
+    self.assertEquals(response.status_code, <span class="number">200</span>)
+
+    <span class="comment"># Check 'Log in' in response</span>
+    self.assertTrue(<span class="string">'Log in'</span> <span class="keyword">in</span> response.content)
+
+    <span class="comment"># Log the user in</span>
+    self.client.login(username=<span class="string">'bobsmith'</span>, password=<span class="string">"password"</span>)
+
+    <span class="comment"># Check response code</span>
+    response = self.client.get(<span class="string">'/admin/'</span>)
+    self.assertEquals(response.status_code, <span class="number">200</span>)
+
+    <span class="comment"># Check 'Log out' in response</span>
+    self.assertTrue(<span class="string">'Log out'</span> <span class="keyword">in</span> response.content)
+
+<span class="function"><span class="keyword">def</span> <span class="title">test_logout</span><span class="params">(self)</span>:</span>
+    <span class="comment"># Log in</span>
+    self.client.login(username=<span class="string">'bobsmith'</span>, password=<span class="string">"password"</span>)
+
+    <span class="comment"># Check response code</span>
+    response = self.client.get(<span class="string">'/admin/'</span>)
+    self.assertEquals(response.status_code, <span class="number">200</span>)
+
+    <span class="comment"># Check 'Log out' in response</span>
+    self.assertTrue(<span class="string">'Log out'</span> <span class="keyword">in</span> response.content)
+
+    <span class="comment"># Log out</span>
+    self.client.logout()
+
+    <span class="comment"># Check response code</span>
+    response = self.client.get(<span class="string">'/admin/'</span>)
+    self.assertEquals(response.status_code, <span class="number">200</span>)
+
+    <span class="comment"># Check 'Log in' in response</span>
+    self.assertTrue(<span class="string">'Log in'</span> <span class="keyword">in</span> response.content)</code></pre>
+<pre><code>
+The `setUp()` method <span class="keyword">is</span> automatically <span class="command">run</span> when <span class="keyword">the</span> test runs, <span class="keyword">and</span> ensures we only need <span class="keyword">to</span> start up <span class="keyword">the</span> client once. Run your tests <span class="keyword">to</span> make sure they pass, <span class="keyword">then</span> commit your changes:
+
+``` bash
+git add blogengine/
+git commit -m 'Refactored admin test'</code></pre>
+<p>Now, we&#39;ll implement a test for creating a new post. The admin interface implements URLs for creating new instances of a model in a consistent format of <code>/admin/app_name/model_name/add/</code>, so the URL for adding a new post will be <code>/admin/blogengine/post/add/</code>.</p>
+<p>Add this method to the AdminTest class:</p>
+<p>``` python blogengine/tests.py
+    def test_create_post(self):</p>
+<pre><code>    # <span class="built_in">Log</span> <span class="keyword">in</span>
+    self.client.login(username=<span class="comment">'bobsmith', password="password")</span>
+
+    # Check <span class="built_in">response</span> code
+    <span class="built_in">response</span> = self.client.<span class="keyword">get</span>(<span class="comment">'/admin/blogengine/post/add/')</span>
+    self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)</code></pre>
+<pre><code>
+Try <span class="property">running</span> <span class="keyword">it</span> <span class="keyword">and</span> this will fail, because we haven't registered <span class="keyword">the</span> Post model <span class="keyword">in</span> <span class="keyword">the</span> Django admin. So we need <span class="keyword">to</span> do <span class="keyword">that</span>. To do so, open a new <span class="type">file</span> <span class="keyword">at</span> `blogengine/admin.py` <span class="keyword">and</span> add <span class="keyword">the</span> following code:
+
+``` python blogengine/admin.py
+import models
+<span class="keyword">from</span> django.contrib import admin
+
+admin.site.register(models.Post)</code></pre>
+<p>Now, run <code>python manage.py test</code> and the test should pass. If you want to confirm that the post model appears in the admin, run <code>python manage.py runserver</code> and click <a href="http://127.0.0.1:8000/admin/">here</a>.</p>
+<p>So now we can reach the page for adding a post, but we haven&#39;t yet tested that we can submit one. Let&#39;s remedy that:</p>
+<p>``` python blogengine/tests.py
+    def test_create_post(self):</p>
+<pre><code>    # <span class="built_in">Log</span> <span class="keyword">in</span>
+    self.client.login(username=<span class="comment">'bobsmith', password="password")</span>
+
+    # Check <span class="built_in">response</span> code
+    <span class="built_in">response</span> = self.client.<span class="keyword">get</span>(<span class="comment">'/admin/blogengine/post/add/')</span>
+    self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)
+
+    # Create the <span class="keyword">new</span> post
+    <span class="built_in">response</span> = self.client.post(<span class="comment">'/admin/blogengine/post/add/', {</span>
+        <span class="comment">'title': 'My first post',</span>
+        <span class="comment">'text': 'This is my first post',</span>
+        <span class="comment">'pub_date_0': '2013-12-28',</span>
+        <span class="comment">'pub_date_1': '22:00:04'</span>
+    },
+    follow=<span class="literal">True</span>
+    )
+    self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)
+
+    # Check added successfully
+    self.assertTrue(<span class="comment">'added successfully' in response.content)</span>
+
+    # Check <span class="keyword">new</span> post <span class="built_in">now</span> <span class="keyword">in</span> database
+    all_posts = Post.objects.all()
+    self.assertEquals(<span class="built_in">len</span>(all_posts), <span class="number">1</span>)</code></pre>
+<pre><code>
+Here we submit the <span class="keyword">new</span> post via HTTP POST, <span class="keyword">with</span> all the data passed through. This mirrors the form created by the Django admin <span class="class"><span class="keyword">interface</span> - <span class="title">if</span> <span class="title">you</span> <span class="title">take</span> <span class="title">a</span> <span class="title">look</span> <span class="title">at</span> <span class="title">the</span> <span class="title">HTML</span> <span class="title">generated</span> <span class="title">by</span> <span class="title">the</span> <span class="title">admin</span>, <span class="title">you</span>'<span class="title">ll</span> <span class="title">see</span> <span class="title">that</span> <span class="title">the</span> <span class="title">inputs</span> <span class="title">are</span> <span class="title">given</span> <span class="title">names</span> <span class="title">that</span> <span class="title">match</span> <span class="title">these</span>. <span class="title">Note</span> <span class="title">that</span> <span class="title">the</span> `<span class="title">pub_date</span>` <span class="title">field</span>, <span class="title">because</span> <span class="title">it</span> <span class="title">represents</span> <span class="title">a</span> <span class="title">datetime</span> <span class="title">object</span>, <span class="title">is</span> <span class="title">split</span> <span class="title">up</span> <span class="title">into</span> <span class="title">a</span> <span class="title">separate</span> <span class="title">date</span> <span class="title">and</span> <span class="title">time</span> <span class="title">field</span>. <span class="title">Also</span> <span class="title">note</span> <span class="title">the</span> <span class="title">parameter</span> `<span class="title">follow</span>=<span class="title">True</span>` - <span class="title">this</span> <span class="title">denotes</span> <span class="title">that</span> <span class="title">the</span> <span class="title">test</span> <span class="title">client</span> <span class="title">should</span> <span class="title">follow</span> <span class="title">any</span> <span class="title">HTTP</span> <span class="title">redirect</span>.
+
+<span class="title">We</span> <span class="title">confirm</span> <span class="title">that</span> <span class="title">the</span> <span class="title">POST</span> <span class="title">request</span> <span class="title">responded</span> <span class="title">with</span> <span class="title">a</span> 200 <span class="title">code</span>, <span class="title">denoting</span> <span class="title">success</span>. <span class="title">We</span> <span class="title">also</span> <span class="title">confirm</span> <span class="title">that</span> <span class="title">the</span> <span class="title">response</span> <span class="title">included</span> <span class="title">the</span> <span class="title">phrase</span> '<span class="title">added</span> <span class="title">successfully</span>'. <span class="title">Finally</span> <span class="title">we</span> <span class="title">confirm</span> <span class="title">that</span> <span class="title">there</span> <span class="title">is</span> <span class="title">now</span> <span class="title">a</span> <span class="title">single</span> <span class="title">Post</span> <span class="title">object</span> <span class="title">in</span> <span class="title">the</span> <span class="title">database</span>. <span class="title">Don</span>'<span class="title">t</span> <span class="title">worry</span> <span class="title">about</span> <span class="title">any</span> <span class="title">existing</span> <span class="title">content</span> - <span class="title">Django</span> <span class="title">creates</span> <span class="title">a</span> <span class="title">dedicated</span> <span class="title">test</span> <span class="title">database</span> <span class="title">and</span> <span class="title">destroys</span> <span class="title">it</span> <span class="title">after</span> <span class="title">the</span> <span class="title">tests</span> <span class="title">are</span> <span class="title">done</span>, <span class="title">so</span> <span class="title">you</span> <span class="title">can</span> <span class="title">be</span> <span class="title">sure</span> <span class="title">that</span> <span class="title">no</span> <span class="title">posts</span> <span class="title">are</span> <span class="title">present</span> <span class="title">unless</span> <span class="title">you</span> <span class="title">explicitly</span> <span class="title">load</span> <span class="title">them</span> <span class="title">from</span> <span class="title">a</span> <span class="title">fixture</span>.
+
+<span class="title">We</span> <span class="title">can</span> <span class="title">now</span> <span class="title">test</span> <span class="title">creating</span> <span class="title">a</span> <span class="title">post</span>, <span class="title">but</span> <span class="title">we</span> <span class="title">also</span> <span class="title">need</span> <span class="title">to</span> <span class="title">ensure</span> <span class="title">we</span> <span class="title">can</span> <span class="title">test</span> <span class="title">editing</span> <span class="title">and</span> <span class="title">deleting</span> <span class="title">them</span>. <span class="title">First</span> <span class="title">we</span>'<span class="title">ll</span> <span class="title">add</span> <span class="title">a</span> <span class="title">test</span> <span class="title">for</span> <span class="title">editing</span> <span class="title">posts</span>:
+
+``` <span class="title">python</span> <span class="title">blogengine</span>/<span class="title">tests</span>.<span class="title">py</span>
+    <span class="title">def</span> <span class="title">test_edit_post</span>(<span class="title">self</span>):
+        # <span class="title">Create</span> <span class="title">the</span> <span class="title">post</span>
+        <span class="title">post</span> = <span class="title">Post</span>()
+        <span class="title">post</span>.<span class="title">title</span> = '<span class="title">My</span> <span class="title">first</span> <span class="title">post</span>'
+        <span class="title">post</span>.<span class="title">text</span> = '<span class="title">This</span> <span class="title">is</span> <span class="title">my</span> <span class="title">first</span> <span class="title">blog</span> <span class="title">post</span>'
+        <span class="title">post</span>.<span class="title">pub_date</span> = <span class="title">timezone</span>.<span class="title">now</span>()
+        <span class="title">post</span>.<span class="title">save</span>()
+
+        # <span class="title">Log</span> <span class="title">in</span>
+        <span class="title">self</span>.<span class="title">client</span>.<span class="title">login</span>(<span class="title">username</span>='<span class="title">bobsmith</span>', <span class="title">password</span>="<span class="title">password</span>")
+
+        # <span class="title">Edit</span> <span class="title">the</span> <span class="title">post</span>
+        <span class="title">response</span> = <span class="title">self</span>.<span class="title">client</span>.<span class="title">post</span>('/<span class="title">admin</span>/<span class="title">blogengine</span>/<span class="title">post</span>/1/', {</span>
+            <span class="string">'title'</span>: <span class="string">'My second post'</span>,
+            <span class="string">'text'</span>: <span class="string">'This is my second blog post'</span>,
+            <span class="string">'pub_date_0'</span>: <span class="string">'2013-12-28'</span>,
+            <span class="string">'pub_date_1'</span>: <span class="string">'22:00:04'</span>
+        },
+        follow=True
+        )
+        self.assertEquals(response.status_code, <span class="number">200</span>)
+
+        # Check changed successfully
+        self.assertTrue(<span class="string">'changed successfully'</span> <span class="keyword">in</span> response.content)
+
+        # Check post amended
+        all_posts = Post.objects.all()
+        self.assertEquals(len(all_posts), <span class="number">1</span>)
+        only_post = all_posts[<span class="number">0</span>]
+        self.assertEquals(only_post.title, <span class="string">'My second post'</span>)
+        self.assertEquals(only_post.text, <span class="string">'This is my second blog post'</span>)</code></pre>
+<p>Here we create a new blog post, then verify we can edit it by resubmitting it with different values, and checking that we get the expected response, and that the data in the database has been updated. Run <code>python manage.py test</code>, and this should pass.</p>
+<p>Finally, we&#39;ll set up a test for deleting posts:</p>
+<p>``` python blogengine/tests.py
+    def test_delete_post(self):</p>
+<pre><code>    # Create the post
+    post = Post()
+    post.title = <span class="comment">'My first post'</span>
+    post.text = <span class="comment">'This is my first blog post'</span>
+    post.pub_date = timezone.<span class="built_in">now</span>()
+    post.save()
+
+    # Check <span class="keyword">new</span> post saved
+    all_posts = Post.objects.all()
+    self.assertEquals(<span class="built_in">len</span>(all_posts), <span class="number">1</span>)
+
+    # <span class="built_in">Log</span> <span class="keyword">in</span>
+    self.client.login(username=<span class="comment">'bobsmith', password="password")</span>
+
+    # Delete the post
+    <span class="built_in">response</span> = self.client.post(<span class="comment">'/admin/blogengine/post/1/delete/', {</span>
+        <span class="comment">'post': 'yes'</span>
+    }, follow=<span class="literal">True</span>)
+    self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)
+
+    # Check deleted successfully
+    self.assertTrue(<span class="comment">'deleted successfully' in response.content)</span>
+
+    # Check post amended
+    all_posts = Post.objects.all()
+    self.assertEquals(<span class="built_in">len</span>(all_posts), <span class="number">0</span>)</code></pre>
+<pre><code>
+Again, <span class="keyword">this</span> <span class="keyword">is</span> pretty similar to what we did before. We create a <span class="keyword">new</span> post, verify that it <span class="keyword">is</span> the sole post <span class="keyword">in</span> the database, and log into the admin. Then we <span class="keyword">delete</span> the post via the admin, and confirm that the admin <span class="class"><span class="keyword">interface</span> <span class="title">confirmed</span> <span class="title">it</span> <span class="title">has</span> <span class="title">been</span> <span class="title">deleted</span>, <span class="title">and</span> <span class="title">the</span> <span class="title">post</span> <span class="title">is</span> <span class="title">gone</span> <span class="title">from</span> <span class="title">the</span> <span class="title">database</span>.
+
+<span class="title">I</span> <span class="title">think</span> <span class="title">it</span>'<span class="title">s</span> <span class="title">now</span> <span class="title">time</span> <span class="title">to</span> <span class="title">commit</span> <span class="title">again</span>:
+
+``` <span class="title">bash</span>
+<span class="title">git</span> <span class="title">add</span> <span class="title">blogengine</span>/
+<span class="title">git</span> <span class="title">commit</span> -<span class="title">m</span> '<span class="title">Post</span> <span class="title">admin</span> <span class="title">tests</span> <span class="title">in</span> <span class="title">place</span>'</code></pre>
+<p>So we now know that we can create, edit and delete posts, and we have tests in place to confirm this. So our next task is to be able to display our posts.</p>
+<p>For now, to keep things simple, we&#39;re only going to implement the index view - in other words, all the posts in reverse chronological order. We&#39;ll use Django&#39;s generic views to keep things really easy.</p>
+<p>Django&#39;s generic views are another really handy feature. As mentioned earlier, a view is a function or class that describes how a specific route should render an object. Now, there are many tasks that recur in web development. For instance, many web pages you may have seen may be a list of objects - in this case, the index page for a blog is a list of blog posts. For that reason, Django has the ListView generic view, which makes it easy to render a list of objects.</p>
+<p>Now, like before, we want to have a test in place. Open up <code>blogengine/tests.py</code> and add the following class at the end of the file:</p>
+<p>``` python blogengine/tests.py
+class PostViewTest(LiveServerTestCase):
+    def setUp(self):
+        self.client = Client()</p>
+<pre><code>def test_index(self):
+    # Create the post
+    post = Post()
+    post.title = <span class="comment">'My first post'</span>
+    post.text = <span class="comment">'This is my first blog post'</span>
+    post.pub_date = timezone.<span class="built_in">now</span>()
+    post.save()
+
+    # Check <span class="keyword">new</span> post saved
+    all_posts = Post.objects.all()
+    self.assertEquals(<span class="built_in">len</span>(all_posts), <span class="number">1</span>)
+
+    # Fetch the index
+    <span class="built_in">response</span> = self.client.<span class="keyword">get</span>(<span class="comment">'/')</span>
+    self.assertEquals(<span class="built_in">response</span>.status_code, <span class="number">200</span>)
+
+    # Check the post title <span class="keyword">is</span> <span class="keyword">in</span> the <span class="built_in">response</span>
+    self.assertTrue(post.title <span class="keyword">in</span> <span class="built_in">response</span>.content)
+
+    # Check the post text <span class="keyword">is</span> <span class="keyword">in</span> the <span class="built_in">response</span>
+    self.assertTrue(post.text <span class="keyword">in</span> <span class="built_in">response</span>.content)
+
+    # Check the post <span class="built_in">date</span> <span class="keyword">is</span> <span class="keyword">in</span> the <span class="built_in">response</span>
+    self.assertTrue(str(post.pub_date.<span class="built_in">year</span>) <span class="keyword">in</span> <span class="built_in">response</span>.content)
+    self.assertTrue(post.pub_date.strftime(<span class="comment">'%b') in response.content)</span>
+    self.assertTrue(str(post.pub_date.<span class="built_in">day</span>) <span class="keyword">in</span> <span class="built_in">response</span>.content)</code></pre>
+<pre><code>
+Here we create <span class="keyword">the</span> post, <span class="keyword">and</span> assert <span class="keyword">that</span> <span class="keyword">it</span> <span class="keyword">is</span> <span class="keyword">the</span> sole post object. We <span class="keyword">then</span> fetch <span class="keyword">the</span> index page, <span class="keyword">and</span> assert <span class="keyword">that</span> <span class="keyword">the</span> HTTP status code <span class="keyword">is</span> <span class="number">200</span> (ie. <span class="keyword">the</span> page exists <span class="keyword">and</span> <span class="keyword">is</span> returned). We <span class="keyword">then</span> verify <span class="keyword">that</span> <span class="keyword">the</span> response <span class="keyword">contains</span> <span class="keyword">the</span> post title, <span class="type">text</span> <span class="keyword">and</span> publication <span class="type">date</span>.
+
+Note <span class="keyword">that</span> <span class="keyword">for</span> <span class="keyword">the</span> <span class="property">month</span>, we need <span class="keyword">to</span> do a bit <span class="keyword">of</span> jiggery-pokery <span class="keyword">to</span> <span class="keyword">get</span> <span class="keyword">the</span> <span class="property">month</span> <span class="property">name</span>. By default Django will <span class="constant">return</span> short <span class="property">month</span> names (eg Jan, Feb etc), <span class="keyword">but</span> Python stores months <span class="keyword">as</span> numbers, so we need <span class="keyword">to</span> format <span class="keyword">it</span> <span class="keyword">as</span> a short <span class="property">month</span> <span class="property">name</span> using `%b`.
+
+If you <span class="command">run</span> this, you will <span class="keyword">get</span> an <span class="keyword">error</span> because <span class="keyword">the</span> index route <span class="keyword">isn't</span> implemented. So let's fix <span class="keyword">that</span>. Open up <span class="keyword">the</span> existing `django_tutorial_blog_ng/urls.py` <span class="type">file</span> <span class="keyword">and</span> amend <span class="keyword">it</span> <span class="keyword">to</span> look like this:
+
+``` python django_tutorial_blog_ng/urls.py
+<span class="keyword">from</span> django.conf.urls import patterns, include, url
+
+<span class="keyword">from</span> django.contrib import admin
+admin.autodiscover()
+
+urlpatterns = patterns('',
+    <span class="comment"># Examples:</span>
+    <span class="comment"># url(r'^$', 'django_tutorial_blog_ng.views.home', name='home'),</span>
+    <span class="comment"># url(r'^blog/', include('blog.urls')),</span>
+
+    url(r'^admin/', include(admin.site.urls)),
+
+    <span class="comment"># Blog URLs</span>
+    url(r'^.*$', include('blogengine.urls')),
+)</code></pre>
+<p>Then, create a new file at <code>blogengine/urls.py</code> and edit it as follows:</p>
+<p>``` python blogengine/urls.py
+from django.conf.urls import patterns, url
+from django.views.generic import ListView
+from blogengine.models import Post</p>
+<p>urlpatterns = patterns(&#39;&#39;,</p>
+<pre><code><span class="preprocessor"># Index</span>
+url(<span class="string">'^$'</span>, ListView.as_view(
+    model=Post,
+    )),</code></pre>
+<p>)</p>
+<pre><code>
+A little explanation <span class="keyword">is</span> called <span class="keyword">for</span>. The project has <span class="keyword">its</span> own `urls.py` <span class="type">file</span> <span class="keyword">that</span> handles routing throughout <span class="keyword">the</span> project. However, because Django encourages you <span class="keyword">to</span> make your apps reusable, we want <span class="keyword">to</span> keep <span class="keyword">the</span> routes <span class="keyword">in</span> <span class="keyword">the</span> individual apps <span class="keyword">as</span> far <span class="keyword">as</span> possible. So, <span class="keyword">in</span> <span class="keyword">the</span> project <span class="type">file</span>, we include <span class="keyword">the</span> `blogengine/urls.py` <span class="type">file</span>.
+
+In <span class="keyword">the</span> app-specific `urls.py`, we import <span class="keyword">the</span> Post model <span class="keyword">and</span> <span class="keyword">the</span> ListView generic view. We <span class="keyword">then</span> define a route <span class="keyword">for</span> <span class="keyword">the</span> index page - <span class="keyword">the</span> regular expression `^$` will match only an empty <span class="type">string</span>, so <span class="keyword">that</span> page will be <span class="keyword">the</span> index. For this route, we <span class="keyword">then</span> call <span class="keyword">the</span> `as_view()` method <span class="keyword">of</span> <span class="keyword">the</span> ListView object, <span class="keyword">and</span> <span class="keyword">set</span> <span class="keyword">the</span> model <span class="keyword">as</span> Post.
+
+Now, <span class="keyword">if</span> you either <span class="command">run</span> <span class="keyword">the</span> tests, <span class="keyword">or</span> <span class="command">run</span> <span class="keyword">the</span> development server <span class="keyword">and</span> visit [<span class="keyword">the</span> index page](http://<span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span>:<span class="number">8000</span>), you'll see <span class="keyword">that</span> <span class="keyword">it</span> <span class="keyword">isn't</span> working yet - you should see <span class="keyword">the</span> <span class="keyword">error</span> `TemplateDoesNotExist: blogengine/post_list.html`. This tells us <span class="keyword">that</span> we need <span class="keyword">to</span> create a template called `blogengine/post_list.html`, so let's do <span class="keyword">that</span>. First <span class="keyword">of</span> all, add <span class="keyword">the</span> following <span class="keyword">at</span> <span class="keyword">the</span> <span class="keyword">end</span> <span class="keyword">of</span> `django_tutorial_blog_ng/settings.py`:
+
+``` python django_tutorial_blog_ng/settings.py
+
+<span class="comment"># Template directory</span>
+TEMPLATE_DIRS = [os.path.join(BASE_DIR, 'templates')]</code></pre>
+<p>Next, create the folders for the templates, and a blank <code>post_list.html</code> file:</p>
+<pre><code class="lang-bash">mkdir templates
+mkdir templates/blogengine
+touch templates/blogengine/post_list.html</code></pre>
+<p>Now, run your tests again, and you&#39;ll see that the template now exists, but a new error is showing up:</p>
+<pre><code class="lang-bash">Creating test database <span class="keyword">for</span> alias <span class="string">'default'</span>...
+......F
+======================================================================
+FAIL: test_index (blogengine.tests.PostViewTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File <span class="string">"/Users/matthewdaly/Projects/django_tutorial_blog_ng/blogengine/tests.py"</span>, line 189, <span class="keyword">in</span> test_index
+    self.assertTrue(post.title <span class="keyword">in</span> response.content)
+AssertionError: False is not <span class="literal">true</span>
+
+----------------------------------------------------------------------
+Ran 7 tests <span class="keyword">in</span> 2.162s
+
+FAILED (failures=1)
+Destroying test database <span class="keyword">for</span> alias <span class="string">'default'</span>...</code></pre>
+<p>To fix this, we make sure the template shows the data we want. Open up <code>templates/blogengine/post_list.html</code> and enter the following:</p>
+<p>``` html templates/blogengine/post_list.html</p>
+<p><html>
+    <head>
+        <title>My Django Blog</title>
+    </head>
+    <body>{% raw %}
+        {% for post in object_list %}
+        <h1>{{ post.title }}</h1>
+        <h3>{{ post.pub_date }}</h3>
+        {{ post.text }}
+        {% endfor %}
+    </body>{% endraw %}
+</html></p>
+<pre><code>
+This <span class="keyword">is</span> only a very basic template, <span class="keyword">and</span> we'll expand upon <span class="keyword">it</span> <span class="keyword">in</span> future.
+
+With <span class="keyword">that</span> done, you can <span class="command">run</span> `python manage.py test`, <span class="keyword">and</span> <span class="keyword">it</span> should pass. Well done! Don't forget <span class="keyword">to</span> commit your changes:
+
+``` bash
+git add django_tutorial_blog_ng/ templates/ blogengine/
+git commit -m 'Implemented <span class="type">list</span> view <span class="keyword">for</span> posts'</code></pre>
+<p>And that&#39;s all for this lesson! We&#39;ve done a hell of a lot in this lesson - set up our project, created a comprehensive test suite for it, and implemented the basic functionality. Next time we&#39;ll make it a bit prettier using Twitter Bootstrap, as well as implementing more of the basic functionality for the blog.</p>
+<p>You can find the source code <a href="https://github.com/matthewbdaly/django_tutorial_blog_ng">on Github</a>. For your convenience, I&#39;ve tagged this lesson as <code>lesson-1</code>, so you can just clone the repository and switch to the end of this lesson with the following commands:</p>
+<pre><code class="lang-bash">git clone https://github.com/matthewbdaly/django_tutorial_blog_ng.git
+cd django_tutorial_blog_ng
+git checkout lesson-1</code></pre>
+<p>That way, you can easily check that what you&#39;ve done matches up with the repository. Future lessons will be similarly tagged to make them easy to navigate.</p>
+
+  </section>
+    <section>
+        <p>
+          28th December 2013
+          
+            by Matthew Daly
+          
+        </p>
+    </section>
+
+  <ul class="pager">
+      
+        <li><a href="/posts/2014-01-02-django-blog-tutorial-the-next-generation-part-2.html">Newer</a></li>
+      
+      
+        <li><a href="/posts/2013-08-16-a-starting-boilerplate-for-php-development-with-vagrant.html">Older</a></li>
+      
+    </ul>
+  <section class="comments">
+    
+      <div id="disqus_thread"></div>
+      <script type="text/javascript">
+        window.disqus_identifier="";
+        window.disqus_url="http://www.matthewdaly.co.uk/posts/2013-12-28-django-blog-tutorial-the-next-generation-part-1.html";
+        window.disqus_title="Django blog tutorial - the next generation - part 1";
+      </script>
+        <script type="text/javascript" src="http://disqus.com/forums/mattbd/embed.js"></script>
+        <noscript><a href="http://mattbd.disqus.com/?url=ref">View the discussion thread.</a></noscript>
+    
+    
+  </section>
+</article>
+
+        </div>
+
+        <footer>
+            <div class="container">
+                Copyright Matthew Daly, 2014.
+            </div>
+        </footer>
+        <script type="text/javascript" src="/static/js/dependencies.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script>
+    </body>
+</html>

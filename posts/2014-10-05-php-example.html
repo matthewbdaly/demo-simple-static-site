@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta property="fb:app_id" content=""/>
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/bootstrap-sass/dist/css/bootstrap.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/flat-ui/dist/css/flat-ui.min.css" media="all" />
+        <link rel="stylesheet" type="text/css" href="/static/bower_components/highlightjs/styles/zenburn.css" media="all" />
+        <link rel="alternate" type="application/rss+xml" title="A Series of Quite Extraordinary Events - feed" href="/index.xml" />
+        <title>A Series of Quite Extraordinary Events - PHP Example</title>
+    </head>
+    <body>
+        <header>
+            <div class="container">
+                <div class="page-header">
+                    <h1>A Series of Quite Extraordinary Events</h1>
+                    <h2>Being the blog of Matthew Daly Esquire</h2>
+                    <nav>
+                        <a href="/">Home</a> | <a href="/archive.html">Archives</a> | <a href="/about.html">About</a> | <a href="/rss.xml">RSS</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <article class="post">
+    
+  <div class="title">
+    <h1><a href="/posts/2014-10-05-php-example.html">PHP Example</a></h1>
+  </div>
+  <section>
+    <h2 id="php-example">PHP example</h2>
+<pre><code class="lang-php"><span class="preprocessor">&lt;?php</span>
+<span class="comment">/**
+ * A PHP library for sending push messages using PushWoosh.
+ *
+ * This library allows new push notifications to be created using the PushWoosh service.
+ *
+ * Can be installed using Composer.
+ *
+ *<span class="phpdoc"> @package</span> PushWoosh
+ */</span>
+
+<span class="keyword">namespace</span> PushWoosh;
+
+<span class="comment">/**
+ * The PushWoosh class is a class for interacting with the PushWoosh push notification service.
+ *
+ * The constructor of the PushWoosh class takes parameters for the application ID, username and password.
+ *<span class="phpdoc"> @category</span> library
+ *<span class="phpdoc"> @package</span> PushWoosh
+ *<span class="phpdoc"> @license</span> http://opensource.org/licenses/MIT
+ *<span class="phpdoc"> @example</span> &lt;br /&gt;
+ *  $push = new PushWoosh($appId, $username, $password);&lt;br /&gt;
+ *  $push-&gt;createMessage($users, 'now', null);
+ *<span class="phpdoc"> @version</span> 0.0.2
+ *<span class="phpdoc"> @since</span> 2014-02-27
+ *<span class="phpdoc"> @author</span> Matthew Daly matthew@astutech.com
+ */</span>
+
+<span class="class"><span class="keyword">class</span> <span class="title">PushWoosh</span>
+{</span>
+    <span class="comment">/**
+     * The configuration settings. Should consist of an array with three keys:
+     * application, username and password
+     *<span class="phpdoc"> @var</span> array
+     */</span>
+    <span class="keyword">protected</span> <span class="variable">$config</span>;
+
+    <span class="comment">/**
+     * Constructor for the PushWoosh object
+     *
+     *<span class="phpdoc"> @param</span> string $appId The PushWoosh app ID to use
+     *<span class="phpdoc"> @param</span> string $username The PushWoosh username to use
+     *<span class="phpdoc"> @param</span> string $password The PushWoosh password to use
+     *
+     *<span class="phpdoc"> @return</span> PushWoosh
+     *<span class="phpdoc"> @since</span> 2014-02-27
+     *<span class="phpdoc"> @author</span> Matthew Daly matthew@astutech.com
+     */</span>
+    <span class="keyword">public</span> <span class="function"><span class="keyword">function</span> <span class="title">__construct</span><span class="params">(<span class="variable">$appId</span>, <span class="variable">$username</span>, <span class="variable">$password</span>)</span>
+    {</span>
+        <span class="comment">// Set the config options up</span>
+        <span class="variable">$config</span> = <span class="keyword">array</span>();
+        <span class="variable">$config</span>[<span class="string">'application'</span>] = <span class="variable">$appId</span>;
+        <span class="variable">$config</span>[<span class="string">'username'</span>] = <span class="variable">$username</span>;
+        <span class="variable">$config</span>[<span class="string">'password'</span>] = <span class="variable">$password</span>;
+        <span class="variable">$this</span>-&gt;config = <span class="variable">$config</span>;
+    }
+
+    <span class="comment">/**
+     * Sends a POST request to create the push message
+     *
+     *<span class="phpdoc"> @param</span> string $url The URL to send the POST request to
+     *<span class="phpdoc"> @param</span> string $data The data to be sent, encoded as JSON
+     *<span class="phpdoc"> @param</span> string $optional_headers Any optional headers. Defaults to null
+     *
+     *<span class="phpdoc"> @return</span> mixed Returns the response, or false if nothing received
+     *<span class="phpdoc"> @since</span> 2014-02-27
+     *<span class="phpdoc"> @author</span> Matthew Daly matthew@astutech.com
+     */</span>
+    <span class="keyword">private</span> <span class="function"><span class="keyword">function</span> <span class="title">doPostRequest</span><span class="params">(<span class="variable">$url</span>, <span class="variable">$data</span>, <span class="variable">$optional_headers</span> = null)</span>
+    {</span>
+        <span class="variable">$params</span> = <span class="keyword">array</span>(
+            <span class="string">'http'</span> =&gt; <span class="keyword">array</span>(
+                <span class="string">'method'</span> =&gt; <span class="string">'POST'</span>,
+                <span class="string">'content'</span> =&gt; <span class="variable">$data</span>
+            ));
+        <span class="keyword">if</span> (<span class="variable">$optional_headers</span> !== <span class="keyword">null</span>) {
+            <span class="variable">$params</span>[<span class="string">'http'</span>][<span class="string">'header'</span>] = <span class="variable">$optional_headers</span>;
+        }
+        <span class="variable">$ctx</span> = stream_context_create(<span class="variable">$params</span>);
+        <span class="variable">$fp</span> = fopen(<span class="variable">$url</span>, <span class="string">'rb'</span>, <span class="keyword">false</span>, <span class="variable">$ctx</span>);
+        <span class="keyword">if</span> (!<span class="variable">$fp</span>) {
+            <span class="keyword">throw</span> <span class="keyword">new</span> <span class="keyword">Exception</span>(<span class="string">"Problem with $url, $php_errmsg"</span>);
+        }
+
+        <span class="variable">$response</span> = @stream_get_contents(<span class="variable">$fp</span>);
+        <span class="keyword">if</span> (<span class="variable">$response</span> === <span class="keyword">false</span>) {
+            <span class="keyword">return</span> <span class="keyword">false</span>;
+        }
+        <span class="keyword">return</span> <span class="variable">$response</span>;
+    }
+
+    <span class="comment">/**
+     * Puts together the POST request to create the push message
+     *
+     *<span class="phpdoc"> @param</span> string $action The action to take
+     *<span class="phpdoc"> @param</span> array $data The data to send
+     *
+     *<span class="phpdoc"> @return</span> bool Confirms that the method executed
+     *<span class="phpdoc"> @since</span> 2014-02-27
+     *<span class="phpdoc"> @author</span> Matthew Daly matthew@astutech.com
+     */</span>
+    <span class="keyword">private</span> <span class="function"><span class="keyword">function</span> <span class="title">pwCall</span><span class="params">(<span class="variable">$action</span>, array <span class="variable">$data</span> = array<span class="params">()</span>)</span>
+    {</span>
+        <span class="variable">$url</span> = <span class="string">'https://cp.pushwoosh.com/json/1.3/'</span>.<span class="variable">$action</span>;
+        <span class="variable">$json</span> = json_encode(<span class="keyword">array</span>(<span class="string">'request'</span> =&gt; <span class="variable">$data</span>));
+        <span class="variable">$res</span> = <span class="variable">$this</span>-&gt;doPostRequest(<span class="variable">$url</span>, <span class="variable">$json</span>, <span class="string">'Content-Type: application/json'</span>);
+        <span class="variable">$responseData</span> = json_decode(<span class="variable">$res</span>);
+        <span class="keyword">if</span> (<span class="variable">$responseData</span>-&gt;status_code == <span class="number">200</span>) {
+            <span class="variable">$response</span> = <span class="keyword">true</span>;
+        } <span class="keyword">else</span> {
+            <span class="comment">// Failed - log error and advise</span>
+            <span class="variable">$response</span> = <span class="keyword">false</span>;
+            error_log(<span class="string">"Could not sent push - "</span> . <span class="variable">$responseData</span>-&gt;status_message);
+        }
+        <span class="keyword">return</span> <span class="variable">$response</span>;
+    }
+
+    <span class="comment">/**
+     * Creates a push message using PushWoosh
+     *
+     *<span class="phpdoc"> @param</span> array $pushes An array of messages to be sent. Each message in the array should be an associative array,
+     * with the key 'content' representing the content of the message to be sent, and the key 'devices' representing 
+     * the device token to send that message to. Leave 'devices' empty to send that message to all users
+     *<span class="phpdoc"> @param</span> string $sendDate Send date of the message. Defaults to right now
+     *<span class="phpdoc"> @param</span> string $link A link to follow when the push notification is clicked. Defaults to null
+     *<span class="phpdoc"> @param</span> int $ios_badges The iOS badge number. Defaults to 1
+     *
+     *<span class="phpdoc"> @return</span> bool Confirms whether the method executed successfully
+     *<span class="phpdoc"> @since</span> 2014-02-27
+     *<span class="phpdoc"> @author</span> Matthew Daly matthew@astutech.com
+     */</span>
+    <span class="keyword">public</span> <span class="function"><span class="keyword">function</span> <span class="title">createMessage</span><span class="params">(array <span class="variable">$pushes</span>, <span class="variable">$sendDate</span> = <span class="string">'now'</span>, <span class="variable">$link</span> = null, <span class="variable">$ios_badges</span> = <span class="number">1</span>)</span>
+    {</span>
+        <span class="comment">// Get the config settings</span>
+        <span class="variable">$config</span> = <span class="variable">$this</span>-&gt;config;
+
+        <span class="comment">// Store the message data</span>
+        <span class="variable">$data</span> = <span class="keyword">array</span>(
+            <span class="string">'application'</span> =&gt; <span class="variable">$config</span>[<span class="string">'application'</span>],
+            <span class="string">'username'</span> =&gt; <span class="variable">$config</span>[<span class="string">'username'</span>],
+            <span class="string">'password'</span> =&gt; <span class="variable">$config</span>[<span class="string">'password'</span>]
+        );
+
+        <span class="comment">// Loop through each push and add them to the notifications array</span>
+        <span class="keyword">foreach</span> (<span class="variable">$pushes</span> <span class="keyword">as</span> <span class="variable">$push</span>) {
+            <span class="variable">$pushData</span> = <span class="keyword">array</span>(
+                <span class="string">'send_date'</span> =&gt; <span class="variable">$sendDate</span>,
+                <span class="string">'content'</span> =&gt; <span class="variable">$push</span>[<span class="string">'content'</span>],
+                <span class="string">'ios_badges'</span> =&gt; <span class="variable">$ios_badges</span>
+            );
+
+            <span class="comment">// If a list of devices is specified, add that to the push data</span>
+            <span class="keyword">if</span> (array_key_exists(<span class="string">'devices'</span>, <span class="variable">$push</span>)) {
+                <span class="variable">$pushData</span>[<span class="string">'devices'</span>] = <span class="variable">$push</span>[<span class="string">'devices'</span>];
+            }
+
+            <span class="comment">// If a link is specified, add that to the push data</span>
+            <span class="keyword">if</span> (<span class="variable">$link</span>) {
+                <span class="variable">$pushData</span>[<span class="string">'link'</span>] = <span class="variable">$link</span>;
+            }
+            <span class="variable">$data</span>[<span class="string">'notifications'</span>][] = <span class="variable">$pushData</span>;
+        }
+
+        <span class="comment">// Send the message</span>
+        <span class="variable">$response</span> = <span class="variable">$this</span>-&gt;pwCall(<span class="string">'createMessage'</span>, <span class="variable">$data</span>);
+
+        <span class="comment">// Return a value</span>
+        <span class="keyword">return</span> <span class="variable">$response</span>;
+    }
+}</code></pre>
+
+  </section>
+    <section>
+        <p>
+          5th October 2014
+          
+            by Matthew Daly
+          
+        </p>
+    </section>
+
+  <ul class="pager">
+      
+        <li><a href="/posts/2014-10-05-python-example.html">Newer</a></li>
+      
+      
+        <li><a href="/posts/2014-10-05-javascript-example.html">Older</a></li>
+      
+    </ul>
+  <section class="comments">
+    
+      <div id="disqus_thread"></div>
+      <script type="text/javascript">
+        window.disqus_identifier="";
+        window.disqus_url="http://www.matthewdaly.co.uk/posts/2014-10-05-php-example.html";
+        window.disqus_title="PHP Example";
+      </script>
+        <script type="text/javascript" src="http://disqus.com/forums/mattbd/embed.js"></script>
+        <noscript><a href="http://mattbd.disqus.com/?url=ref">View the discussion thread.</a></noscript>
+    
+    
+  </section>
+</article>
+
+        </div>
+
+        <footer>
+            <div class="container">
+                Copyright Matthew Daly, 2014.
+            </div>
+        </footer>
+        <script type="text/javascript" src="/static/js/dependencies.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script>
+    </body>
+</html>
